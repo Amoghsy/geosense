@@ -1,12 +1,11 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
-  ImageBackground,
-  ScrollView,
+  Image,
   Alert,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,7 +17,7 @@ export function OfficerMissionScreen() {
   const [navigating, setNavigating] = useState(false);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Assigned Mission"
         subtitle="MISSION GS-2048"
@@ -28,10 +27,11 @@ export function OfficerMissionScreen() {
       <View style={styles.container}>
         {/* Map Viewport with Mission Route */}
         <View style={styles.mapViewport}>
-          <ImageBackground
+          <Image
             source={require('@/assets/images/design/mission_map.jpg')}
-            style={styles.mapImage}
-            resizeMode="cover">
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
             
             {/* Destination Flag Tag */}
             <View style={styles.destinationTag}>
@@ -68,7 +68,6 @@ export function OfficerMissionScreen() {
                 <Text style={styles.legendLabel}>Route</Text>
               </View>
             </View>
-          </ImageBackground>
         </View>
 
         {/* Bottom Mission Card */}

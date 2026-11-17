@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Image,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
 
 export function CitizenProfileScreen() {
-  const { navigate } = useApp();
+  const { navigate, citizenName, citizenPhone, setPortalTab, logoutCitizen } = useApp();
 
   const menuItems = [
     {
@@ -67,7 +67,7 @@ export function CitizenProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar title="Profile & Settings" variant="sub-light" />
 
       <ScrollView
@@ -82,8 +82,8 @@ export function CitizenProfileScreen() {
             style={styles.avatarImage}
           />
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>Aiban Khonglah</Text>
-            <Text style={styles.userPhone}>+91 9XXXX 01482</Text>
+            <Text style={styles.userName}>{citizenName || 'Aiban Khonglah'}</Text>
+            <Text style={styles.userPhone}>{citizenPhone || '+91 98630 01482'}</Text>
             <View style={styles.roleBadge}>
               <Text style={styles.roleBadgeText}>CITIZEN</Text>
             </View>
@@ -133,10 +133,22 @@ export function CitizenProfileScreen() {
         {/* Switch to Field Officer Workspace */}
         <TouchableOpacity
           style={styles.officerPortalButton}
-          onPress={() => navigate('officer-login')}
+          onPress={() => {
+            setPortalTab('officer');
+            navigate('login-portal');
+          }}
           activeOpacity={0.85}>
           <Feather name="shield" size={18} color="#0D5C3A" />
           <Text style={styles.officerPortalText}>Field Officer Portal Login</Text>
+        </TouchableOpacity>
+
+        {/* Sign Out / Return to Access Portal */}
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={logoutCitizen}
+          activeOpacity={0.85}>
+          <Feather name="log-out" size={18} color="#DC2626" />
+          <Text style={styles.signOutButtonText}>Sign Out / Switch Portal</Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -156,7 +168,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 95,
   },
   userCard: {
     flexDirection: 'row',
@@ -298,6 +310,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#0D5C3A',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
+    height: 50,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginTop: 12,
+    gap: 8,
+  },
+  signOutButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });
 

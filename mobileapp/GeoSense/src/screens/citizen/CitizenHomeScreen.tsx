@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
   View,
@@ -5,8 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
 } from 'react-native';
 import {
   Feather,
@@ -22,8 +21,7 @@ export function CitizenHomeScreen() {
   const [isBannerOpen, setIsBannerOpen] = useState(false);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar variant="citizen-main" />
 
       <ScrollView
@@ -229,7 +227,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 90,
   },
   greetingSection: {
     marginBottom: 20,
@@ -361,8 +359,8 @@ const styles = StyleSheet.create({
     width: '31%',
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -374,19 +372,20 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   actionIconBox: {
-    width: 48,
-    height: 48,
+    width: 46,
+    height: 46,
     borderRadius: 14,
     backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   actionLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#334155',
     textAlign: 'center',
+    lineHeight: 15,
   },
   forecastHeaderRow: {
     flexDirection: 'row',

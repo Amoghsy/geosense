@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Image,
   Alert,
 } from 'react-native';
@@ -29,7 +29,7 @@ export function OfficerIncidentVerificationScreen() {
   const pendingCount = verificationReports.filter((r) => r.status === 'pending').length;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Incident Verification"
         subtitle="EAST KHASI HILLS"
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 95,
   },
   headerCountRow: {
     flexDirection: 'row',

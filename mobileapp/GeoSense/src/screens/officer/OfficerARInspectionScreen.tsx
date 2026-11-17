@@ -1,11 +1,11 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
-  ImageBackground,
+  Image,
   Alert,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,7 +23,7 @@ export function OfficerARInspectionScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="AR Field Inspection"
         subtitle="SOHRA SLOPE · S1"
@@ -36,10 +36,11 @@ export function OfficerARInspectionScreen() {
       />
 
       <View style={styles.container}>
-        <ImageBackground
+        <Image
           source={require('@/assets/images/design/officer_ar_view.jpg')}
-          style={styles.bgImage}
-          resizeMode="cover">
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
           
           {/* Top HUD Indicators */}
           <View style={styles.topHudRow}>
@@ -117,8 +118,6 @@ export function OfficerARInspectionScreen() {
               AI-assisted view. Confirm conditions on site.{'\n'}Do not enter marked risk zones.
             </Text>
           </View>
-
-        </ImageBackground>
       </View>
     </SafeAreaView>
   );

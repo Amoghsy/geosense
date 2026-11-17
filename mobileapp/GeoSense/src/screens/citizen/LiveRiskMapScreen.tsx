@@ -1,11 +1,11 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
-  ImageBackground,
+  Image,
   TextInput,
   Dimensions,
 } from 'react-native';
@@ -21,15 +21,16 @@ export function LiveRiskMapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar title="Live Risk Map" variant="sub-light" />
 
       <View style={styles.mapContainer}>
         {/* Real Satellite Map Image from PDF Asset */}
-        <ImageBackground
+        <Image
           source={require('@/assets/images/design/satellite_map.jpg')}
-          style={styles.mapImage}
-          resizeMode="cover">
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
           
           {/* Top Search Bar & Layer Chips */}
           <View style={styles.topControls}>
@@ -219,7 +220,6 @@ export function LiveRiskMapScreen() {
 
             <Text style={styles.mapDisclaimer}>Demo data · Not a live safety advisory</Text>
           </View>
-        </ImageBackground>
       </View>
     </SafeAreaView>
   );

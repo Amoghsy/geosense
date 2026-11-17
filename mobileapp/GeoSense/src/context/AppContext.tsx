@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 export type UserRole = 'citizen' | 'officer';
 
 export type ScreenName =
+  // Auth / Portal screens
+  | 'login-portal'
   // Citizen screens
   | 'citizen-home'
   | 'safety-outlook'
@@ -61,6 +63,8 @@ export interface VerificationReport {
 interface AppContextType {
   role: UserRole;
   setRole: (role: UserRole) => void;
+  portalTab: 'citizen' | 'officer';
+  setPortalTab: (tab: 'citizen' | 'officer') => void;
   currentScreen: ScreenName;
   activeTab: TabName;
   navigate: (screen: ScreenName) => void;
@@ -72,8 +76,14 @@ interface AppContextType {
   verificationReports: VerificationReport[];
   verifyReport: (id: string) => void;
   rejectReport: (id: string) => void;
+  isLoggedInCitizen: boolean;
   isLoggedInOfficer: boolean;
-  loginOfficer: () => void;
+  citizenName: string;
+  citizenPhone: string;
+  officerId: string;
+  loginCitizen: (name?: string, phone?: string) => void;
+  logoutCitizen: () => void;
+  loginOfficer: (id?: string) => void;
   logoutOfficer: () => void;
 }
 
@@ -120,11 +130,16 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole>('citizen');
-  const [currentScreen, setCurrentScreen] = useState<ScreenName>('citizen-home');
-  const [history, setHistory] = useState<ScreenName[]>(['citizen-home']);
+  const [portalTab, setPortalTab] = useState<'citizen' | 'officer'>('citizen');
+  const [currentScreen, setCurrentScreen] = useState<ScreenName>('login-portal');
+  const [history, setHistory] = useState<ScreenName[]>(['login-portal']);
   const [incidentDraft, setIncidentDraft] = useState<IncidentReportDraft>(defaultIncidentDraft);
   const [verificationReports, setVerificationReports] = useState<VerificationReport[]>(initialVerificationReports);
+  const [isLoggedInCitizen, setIsLoggedInCitizen] = useState<boolean>(false);
   const [isLoggedInOfficer, setIsLoggedInOfficer] = useState<boolean>(false);
+  const [citizenName, setCitizenName] = useState<string>('Aiban Khonglah');
+  const [citizenPhone, setCitizenPhone] = useState<string>('+91 98630 01482');
+  const [officerId, setOfficerId] = useState<string>('FO-1027');
 
   const determineTab = (screen: ScreenName): TabName => {
     if (role === 'citizen') {
@@ -145,10 +160,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeTab = determineTab(currentScreen);
 
   const navigate = (screen: ScreenName) => {
-    // Determine if switching role context
-    if (screen.startsWith('officer-') && screen !== 'officer-login') {
+    // Determine role context
+    if (screen === 'officer-login' || screen.startsWith('officer-')) {
       setRole('officer');
-    } else if (!screen.startsWith('officer-')) {
+    } else if (screen !== 'login-portal') {
       setRole('citizen');
     }
     setHistory((prev) => [...prev, screen]);
@@ -164,10 +179,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCurrentScreen(prevScreen);
     } else {
       // Default fallback
-      if (role === 'citizen') {
+      if (isLoggedInOfficer) {
+        setCurrentScreen('officer-home');
+      } else if (isLoggedInCitizen) {
         setCurrentScreen('citizen-home');
       } else {
-        setCurrentScreen('officer-home');
+        setCurrentScreen('login-portal');
       }
     }
   };
@@ -192,7 +209,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const loginOfficer = () => {
+  const loginCitizen = (name?: string, phone?: string) => {
+    if (name && name.trim()) setCitizenName(name.trim());
+    if (phone && phone.trim()) setCitizenPhone(phone.trim());
+    setIsLoggedInCitizen(true);
+    setRole('citizen');
+    navigate('citizen-home');
+  };
+
+  const logoutCitizen = () => {
+    setIsLoggedInCitizen(false);
+    setPortalTab('citizen');
+    navigate('login-portal');
+  };
+
+  const loginOfficer = (id?: string) => {
+    if (id && id.trim()) setOfficerId(id.trim());
     setIsLoggedInOfficer(true);
     setRole('officer');
     navigate('officer-home');
@@ -200,8 +232,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logoutOfficer = () => {
     setIsLoggedInOfficer(false);
-    setRole('citizen');
-    navigate('citizen-home');
+    setPortalTab('officer');
+    navigate('login-portal');
   };
 
   return (
@@ -209,6 +241,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         role,
         setRole,
+        portalTab,
+        setPortalTab,
         currentScreen,
         activeTab,
         navigate,
@@ -220,7 +254,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         verificationReports,
         verifyReport,
         rejectReport,
+        isLoggedInCitizen,
         isLoggedInOfficer,
+        citizenName,
+        citizenPhone,
+        officerId,
+        loginCitizen,
+        logoutCitizen,
         loginOfficer,
         logoutOfficer,
       }}>
@@ -236,4 +276,3 @@ export function useApp() {
   }
   return context;
 }
-

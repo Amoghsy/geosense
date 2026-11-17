@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, StatusBar as RNStatusBar } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { GeoSenseLogo } from './GeoSenseLogo';
 
@@ -19,18 +21,27 @@ export function HeaderBar({
   rightAction,
   showBack = true,
 }: HeaderBarProps) {
-  const { goBack, navigate, role } = useApp();
+  const { goBack, navigate } = useApp();
+  const insets = useSafeAreaInsets();
+  
+  // Robust top inset ensuring full clearance of punch-hole cameras (Pixel 9, etc.), status bar icons, and Dynamic Islands
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? Math.max(RNStatusBar.currentHeight || 0, 46) : 44
+  );
 
   // 1. Citizen Main Header (Logo, Bell, Avatar)
   if (variant === 'citizen-main') {
     return (
-      <View style={styles.citizenMainContainer}>
+      <View style={[styles.citizenMainContainer, { paddingTop: topInset + 8 }]}>
+        <StatusBar style="dark" />
         <GeoSenseLogo size={28} textSize={22} color="#00A86B" textColor="#0F172A" />
         <View style={styles.rightIconsRow}>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => navigate('alerts')}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="notifications-outline" size={24} color="#0F172A" />
             <View style={styles.unreadDot} />
           </TouchableOpacity>
@@ -51,13 +62,15 @@ export function HeaderBar({
   // 2. Officer Main Header (Dark green, Logo, Bell)
   if (variant === 'officer-main') {
     return (
-      <View style={styles.officerMainContainer}>
+      <View style={[styles.officerMainContainer, { paddingTop: topInset + 8 }]}>
+        <StatusBar style="light" />
         <GeoSenseLogo size={28} textSize={22} color="#10B981" textColor="#FFFFFF" />
         <View style={styles.rightIconsRow}>
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => navigate('officer-alerts')}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
             <View style={[styles.unreadDot, { backgroundColor: '#EF4444' }]} />
           </TouchableOpacity>
@@ -69,7 +82,8 @@ export function HeaderBar({
   // 3. Officer Sub-screen Dark Header
   if (variant === 'officer-dark') {
     return (
-      <View style={styles.officerDarkContainer}>
+      <View style={[styles.officerDarkContainer, { paddingTop: topInset + 8 }]}>
+        <StatusBar style="light" />
         <View style={styles.headerLeft}>
           {showBack && (
             <TouchableOpacity onPress={goBack} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -94,7 +108,8 @@ export function HeaderBar({
 
   // 4. Citizen / Sub-screen Light Header
   return (
-    <View style={styles.subLightContainer}>
+    <View style={[styles.subLightContainer, { paddingTop: topInset + 8 }]}>
+      <StatusBar style="dark" />
       <View style={styles.headerLeft}>
         {showBack && (
           <TouchableOpacity onPress={goBack} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -119,25 +134,26 @@ export function HeaderBar({
 
 const styles = StyleSheet.create({
   citizenMainContainer: {
-    height: 56,
     paddingHorizontal: 20,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   officerMainContainer: {
-    height: 56,
     paddingHorizontal: 20,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#0D5C3A',
   },
   subLightContainer: {
-    minHeight: 56,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -146,9 +162,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   officerDarkContainer: {
-    minHeight: 56,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -180,7 +195,7 @@ const styles = StyleSheet.create({
   subSubtitle: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 1,
+    marginTop: 2,
   },
   officerTitle: {
     fontSize: 18,
@@ -193,7 +208,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#A7F3D0',
     letterSpacing: 0.5,
-    marginTop: 1,
+    marginTop: 2,
     textTransform: 'uppercase',
   },
   rightIconsRow: {
@@ -229,4 +244,3 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
-

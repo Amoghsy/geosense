@@ -1,176 +1,184 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  ImageBackground,
-  Switch,
-  Alert,
-} from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import { useApp } from '@/context/AppContext';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useState } from 'react';
+import {
+  Alert,
+  Image,
+  Platform,
+  StatusBar as RNStatusBar,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export function ARFieldIntelligenceScreen() {
   const { goBack, navigate } = useApp();
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? Math.max(RNStatusBar.currentHeight || 0, 46) : 44
+  );
   const [mode, setMode] = useState<'ar' | 'map'>('ar');
   const [riskOverlay, setRiskOverlay] = useState(true);
 
   return (
     <View style={styles.container}>
-      <ImageBackground
+      <StatusBar style="light" />
+      <Image
         source={require('@/assets/images/design/ar_camera_view.jpg')}
-        style={styles.bgImage}
-        resizeMode="cover">
-        
-        <SafeAreaView style={styles.safeArea}>
-          {/* Top Custom AR Navigation Bar */}
-          <View style={styles.topBar}>
-            <TouchableOpacity
-              onPress={goBack}
-              style={styles.backBtn}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+      />
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+        {/* Top Custom AR Navigation Bar */}
+        <View style={[styles.topBar, { paddingTop: topInset + 6 }]}>
+          <TouchableOpacity
+            onPress={goBack}
+            style={styles.backBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
 
-            <Text style={styles.arTitle}>AR Field Intelligence</Text>
+          <Text style={styles.arTitle}>AR Field Intelligence</Text>
 
-            <TouchableOpacity
-              style={styles.cameraIconBtn}
-              onPress={() => Alert.alert('Snapshot', 'AR Field snapshot captured')}>
-              <Feather name="camera" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cameraIconBtn}
+            onPress={() => Alert.alert('Snapshot', 'AR Field snapshot captured')}>
+            <Feather name="camera" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* AR Status HUD Row */}
+        <View style={styles.hudStatusRow}>
+          <View style={styles.activeTag}>
+            <View style={styles.liveGreenDot} />
+            <Text style={styles.activeTagText}>CAMERA ACTIVE · AR</Text>
+          </View>
+          <Text style={styles.gpsAccuracyText}>GPS accuracy ±4 m</Text>
+        </View>
+
+        {/* Floating High Risk Zone Card */}
+        <View style={styles.riskZoneCard}>
+          <View style={styles.riskZoneHeader}>
+            <Ionicons name="warning-outline" size={16} color="#EF4444" />
+            <Text style={styles.riskZoneCardTitle}>HIGH RISK ZONE</Text>
           </View>
 
-          {/* AR Status HUD Row */}
-          <View style={styles.hudStatusRow}>
-            <View style={styles.activeTag}>
-              <View style={styles.liveGreenDot} />
-              <Text style={styles.activeTagText}>CAMERA ACTIVE · AR</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statCol}>
+              <Text style={styles.statBigRed}>87%</Text>
+              <Text style={styles.statLabel}>Landslide Probability</Text>
             </View>
-            <Text style={styles.gpsAccuracyText}>GPS accuracy ±4 m</Text>
-          </View>
-
-          {/* Floating High Risk Zone Card */}
-          <View style={styles.riskZoneCard}>
-            <View style={styles.riskZoneHeader}>
-              <Ionicons name="warning-outline" size={16} color="#EF4444" />
-              <Text style={styles.riskZoneCardTitle}>HIGH RISK ZONE</Text>
+            <View style={styles.statCol}>
+              <Text style={styles.statMedRed}>HIGH</Text>
+              <Text style={styles.statLabel}>Risk Level</Text>
             </View>
-
-            <View style={styles.statsRow}>
-              <View style={styles.statCol}>
-                <Text style={styles.statBigRed}>87%</Text>
-                <Text style={styles.statLabel}>Landslide Probability</Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text style={styles.statMedRed}>HIGH</Text>
-                <Text style={styles.statLabel}>Risk Level</Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text style={styles.statMedRed}>Next 6 Hours</Text>
-                <Text style={styles.statLabel}>Predicted Window</Text>
-              </View>
+            <View style={styles.statCol}>
+              <Text style={styles.statMedRed}>Next 6 Hours</Text>
+              <Text style={styles.statLabel}>Predicted Window</Text>
             </View>
           </View>
+        </View>
 
-          {/* AR Overlays on Terrain */}
-          {/* 1. Unstable Slope Red Polygon */}
-          {riskOverlay && (
-            <View style={styles.unstableSlopePolygon}>
-              <View style={styles.unstableBadge}>
-                <Text style={styles.unstableBadgeText}>UNSTABLE SLOPE</Text>
-              </View>
-            </View>
-          )}
-
-          {/* 2. Shelter Ridge Yellow Polygon */}
-          <View style={styles.shelterPolygon}>
-            <View style={styles.shelterBadge}>
-              <Feather name="home" size={13} color="#FFFFFF" />
-              <Text style={styles.shelterBadgeText}>Shelter A · 2.8 km</Text>
+        {/* AR Overlays on Terrain */}
+        {/* 1. Unstable Slope Red Polygon */}
+        {riskOverlay && (
+          <View style={styles.unstableSlopePolygon}>
+            <View style={styles.unstableBadge}>
+              <Text style={styles.unstableBadgeText}>UNSTABLE SLOPE</Text>
             </View>
           </View>
+        )}
 
-          {/* 3. Glowing Road Chevrons (^ ^ ^) */}
-          <View style={styles.chevronsContainer}>
-            <MaterialCommunityIcons name="chevron-up" size={42} color="rgba(16, 185, 129, 0.6)" />
-            <MaterialCommunityIcons name="chevron-up" size={54} color="rgba(16, 185, 129, 0.8)" style={{ marginTop: -20 }} />
-            <MaterialCommunityIcons name="chevron-up" size={72} color="#10B981" style={{ marginTop: -24 }} />
+        {/* 2. Shelter Ridge Yellow Polygon */}
+        <View style={styles.shelterPolygon}>
+          <View style={styles.shelterBadge}>
+            <Feather name="home" size={13} color="#FFFFFF" />
+            <Text style={styles.shelterBadgeText}>Shelter A · 2.8 km</Text>
           </View>
+        </View>
 
-          {/* Right Floating AR HUD Controls */}
-          <View style={styles.rightHudControls}>
-            <TouchableOpacity style={styles.hudToolBtn}>
-              <MaterialCommunityIcons name="layers-outline" size={20} color="#1E293B" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.hudToolBtn}>
-              <MaterialCommunityIcons name="hospital-box-outline" size={20} color="#1E293B" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.hudToolBtn}>
-              <Feather name="navigation" size={20} color="#1E293B" />
-            </TouchableOpacity>
-          </View>
+        {/* 3. Glowing Road Chevrons (^ ^ ^) */}
+        <View style={styles.chevronsContainer}>
+          <MaterialCommunityIcons name="chevron-up" size={42} color="rgba(16, 185, 129, 0.6)" />
+          <MaterialCommunityIcons name="chevron-up" size={54} color="rgba(16, 185, 129, 0.8)" style={{ marginTop: -20 }} />
+          <MaterialCommunityIcons name="chevron-up" size={72} color="#10B981" style={{ marginTop: -24 }} />
+        </View>
 
-          {/* Bottom Controls Area */}
-          <View style={styles.bottomControlsArea}>
-            <View style={styles.modeAndToggleRow}>
-              {/* AR / Map Switch */}
-              <View style={styles.arMapToggle}>
-                <TouchableOpacity
-                  style={[styles.togglePill, mode === 'ar' && styles.togglePillActive]}
-                  onPress={() => setMode('ar')}>
-                  <Text style={[styles.toggleText, mode === 'ar' && styles.toggleTextActive]}>
-                    AR
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.togglePill, mode === 'map' && styles.togglePillActive]}
-                  onPress={() => {
-                    setMode('map');
-                    navigate('map');
-                  }}>
-                  <Text style={[styles.toggleText, mode === 'map' && styles.toggleTextActive]}>
-                    Map
-                  </Text>
-                </TouchableOpacity>
-              </View>
+        {/* Right Floating AR HUD Controls */}
+        <View style={styles.rightHudControls}>
+          <TouchableOpacity style={styles.hudToolBtn}>
+            <MaterialCommunityIcons name="layers-outline" size={20} color="#1E293B" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.hudToolBtn}>
+            <MaterialCommunityIcons name="hospital-box-outline" size={20} color="#1E293B" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.hudToolBtn}>
+            <Feather name="navigation" size={20} color="#1E293B" />
+          </TouchableOpacity>
+        </View>
 
-              {/* Risk Overlay Switch */}
-              <View style={styles.switchWrapper}>
-                <Text style={styles.switchLabel}>Risk overlay</Text>
-                <Switch
-                  value={riskOverlay}
-                  onValueChange={setRiskOverlay}
-                  trackColor={{ false: '#475569', true: '#10B981' }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
+        {/* Bottom Controls Area */}
+        <View style={styles.bottomControlsArea}>
+          <View style={styles.modeAndToggleRow}>
+            {/* AR / Map Switch */}
+            <View style={styles.arMapToggle}>
+              <TouchableOpacity
+                style={[styles.togglePill, mode === 'ar' && styles.togglePillActive]}
+                onPress={() => setMode('ar')}>
+                <Text style={[styles.toggleText, mode === 'ar' && styles.toggleTextActive]}>
+                  AR
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.togglePill, mode === 'map' && styles.togglePillActive]}
+                onPress={() => {
+                  setMode('map');
+                  navigate('map');
+                }}>
+                <Text style={[styles.toggleText, mode === 'map' && styles.toggleTextActive]}>
+                  Map
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Circular Target / Shutter Button */}
-            <TouchableOpacity
-              style={styles.shutterButton}
-              onPress={() => Alert.alert('Scanned', 'Terrain analysis updated in real time')}
-              activeOpacity={0.8}>
-              <View style={styles.shutterInnerCircle}>
-                <MaterialCommunityIcons name="line-scan" size={28} color="#00875A" />
-              </View>
-            </TouchableOpacity>
-
-            <Text style={styles.scanningText}>Scanning terrain · Keep camera steady</Text>
-
-            {/* Safety Distance Alert Box */}
-            <View style={styles.bottomAlertBox}>
-              <Ionicons name="shield-outline" size={18} color="#DC2626" />
-              <Text style={styles.bottomAlertText}>
-                Maintain a safe distance. Avoid unstable slopes.
-              </Text>
+            {/* Risk Overlay Switch */}
+            <View style={styles.switchWrapper}>
+              <Text style={styles.switchLabel}>Risk overlay</Text>
+              <Switch
+                value={riskOverlay}
+                onValueChange={setRiskOverlay}
+                trackColor={{ false: '#475569', true: '#10B981' }}
+                thumbColor="#FFFFFF"
+              />
             </View>
           </View>
-        </SafeAreaView>
-      </ImageBackground>
+
+          {/* Circular Target / Shutter Button */}
+          <TouchableOpacity
+            style={styles.shutterButton}
+            onPress={() => Alert.alert('Scanned', 'Terrain analysis updated in real time')}
+            activeOpacity={0.8}>
+            <View style={styles.shutterInnerCircle}>
+              <MaterialCommunityIcons name="line-scan" size={28} color="#00875A" />
+            </View>
+          </TouchableOpacity>
+
+          <Text style={styles.scanningText}>Scanning terrain · Keep camera steady</Text>
+
+          {/* Safety Distance Alert Box */}
+          <View style={styles.bottomAlertBox}>
+            <Ionicons name="shield-outline" size={18} color="#DC2626" />
+            <Text style={styles.bottomAlertText}>
+              Maintain a safe distance. Avoid unstable slopes.
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }

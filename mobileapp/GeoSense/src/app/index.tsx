@@ -2,7 +2,9 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { BottomNavBar } from '@/components/BottomNavBar';
-import { QuickScreenPicker } from '@/components/QuickScreenPicker';
+
+// Authentication & Portal Screens
+import { LoginPortalScreen } from '@/screens/auth/LoginPortalScreen';
 
 // Citizen Screens
 import { CitizenHomeScreen } from '@/screens/citizen/CitizenHomeScreen';
@@ -36,6 +38,10 @@ export default function AppMain() {
 
   const renderScreen = () => {
     switch (currentScreen) {
+      // Auth / Portal screen
+      case 'login-portal':
+        return <LoginPortalScreen />;
+
       // Citizen screens
       case 'citizen-home':
         return <CitizenHomeScreen />;
@@ -87,7 +93,7 @@ export default function AppMain() {
         return <OfficerProfileScreen />;
 
       default:
-        return <CitizenHomeScreen />;
+        return <LoginPortalScreen />;
     }
   };
 
@@ -95,7 +101,6 @@ export default function AppMain() {
     <View style={styles.container}>
       <View style={styles.screenContainer}>{renderScreen()}</View>
       <BottomNavBar />
-      <QuickScreenPicker />
     </View>
   );
 }

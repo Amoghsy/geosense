@@ -1,10 +1,10 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -25,7 +25,7 @@ export function ReportIncidentSuccessScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar title="Report submitted" variant="sub-light" />
 
       <ScrollView
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 36,
-    paddingBottom: 40,
+    paddingBottom: 95,
     alignItems: 'center',
   },
   successIconCircle: {

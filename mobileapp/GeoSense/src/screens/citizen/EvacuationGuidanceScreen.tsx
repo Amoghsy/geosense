@@ -1,12 +1,11 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
-  ImageBackground,
-  ScrollView,
+  Image,
   Alert,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -26,7 +25,7 @@ export function EvacuationGuidanceScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar title="Evacuation guidance" variant="sub-light" />
 
       {/* Crimson Risk Banner */}
@@ -40,10 +39,11 @@ export function EvacuationGuidanceScreen() {
       <View style={styles.contentContainer}>
         {/* Map Viewport with Safe Route & Blocked Road */}
         <View style={styles.mapViewport}>
-          <ImageBackground
+          <Image
             source={require('@/assets/images/design/satellite_map.jpg')}
-            style={styles.mapImage}
-            resizeMode="cover">
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
             
             {/* Mawmluh Shelter Pin */}
             <View style={styles.shelterPinContainer}>
@@ -96,7 +96,6 @@ export function EvacuationGuidanceScreen() {
                 <Feather name="minus" size={18} color="#1E293B" />
               </TouchableOpacity>
             </View>
-          </ImageBackground>
         </View>
 
         {/* Bottom Navigation Sheet */}

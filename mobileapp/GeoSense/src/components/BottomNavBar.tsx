@@ -1,13 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useApp, TabName } from '@/context/AppContext';
 
 export function BottomNavBar() {
   const { role, activeTab, navigate, currentScreen } = useApp();
+  const insets = useSafeAreaInsets();
 
-  // Do not show bottom nav on full-screen flows like Officer Login, AR view full screen, or step-by-step reporting
+  // Do not show bottom nav on full-screen flows like Login Portal, Officer Login, AR view full screen, or step-by-step reporting
   const isFullScreenFlow =
+    currentScreen === 'login-portal' ||
     currentScreen === 'officer-login' ||
     currentScreen === 'ar-view' ||
     currentScreen === 'officer-ar' ||
@@ -18,6 +21,9 @@ export function BottomNavBar() {
   if (isFullScreenFlow) {
     return null;
   }
+
+  // Dynamic bottom padding adapting to Android navigation bar and iOS home indicator
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'android' ? 14 : 8);
 
   const handleTabPress = (tab: TabName) => {
     if (role === 'citizen') {
@@ -36,7 +42,7 @@ export function BottomNavBar() {
   const isCitizen = role === 'citizen';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: bottomPadding, height: 54 + bottomPadding }]}>
       {/* Tab 1: Home */}
       <TouchableOpacity
         style={styles.tabItem}
@@ -78,9 +84,9 @@ export function BottomNavBar() {
           activeOpacity={0.7}>
           <View style={[styles.iconWrapper, activeTab === 'missions' && styles.iconActiveWrapper]}>
             <Feather
-              name="map-pin"
+              name="target"
               size={21}
-              color={activeTab === 'missions' ? '#00875A' : '#64748B'}
+              color={activeTab === 'missions' ? '#0D5C3A' : '#64748B'}
             />
           </View>
           <Text style={[styles.tabLabel, activeTab === 'missions' && styles.tabLabelActive]}>
@@ -129,9 +135,7 @@ export function BottomNavBar() {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    height: Platform.OS === 'ios' ? 84 : 68,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-    paddingTop: 8,
+    paddingTop: 6,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
@@ -169,4 +173,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

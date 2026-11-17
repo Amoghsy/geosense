@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Switch,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,11 +13,11 @@ import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
 
 export function OfficerProfileScreen() {
-  const { logoutOfficer, navigate } = useApp();
+  const { logoutOfficer, navigate, officerId } = useApp();
   const [criticalAlertsEnabled, setCriticalAlertsEnabled] = useState(true);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Profile"
         variant="officer-dark"
@@ -42,7 +42,7 @@ export function OfficerProfileScreen() {
 
             <View style={styles.nameCol}>
               <Text style={styles.officerName}>Riban Khongwir</Text>
-              <Text style={styles.officerRole}>Field Officer · FO-1027</Text>
+              <Text style={styles.officerRole}>Field Officer · {officerId || 'FO-1027'}</Text>
               <View style={styles.onDutyPill}>
                 <View style={styles.onDutyDot} />
                 <Text style={styles.onDutyText}>On Duty</Text>
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 95,
   },
   officerCard: {
     backgroundColor: '#FFFFFF',

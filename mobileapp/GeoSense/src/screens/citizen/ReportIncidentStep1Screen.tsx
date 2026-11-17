@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState } from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Image,
   TextInput,
 } from 'react-native';
@@ -23,7 +23,7 @@ export function ReportIncidentStep1Screen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Report a Landslide Incident"
         subtitle="Step 1 of 2 · Evidence & location"
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 14,
-    paddingBottom: 40,
+    paddingBottom: 95,
   },
   warningBox: {
     flexDirection: 'row',

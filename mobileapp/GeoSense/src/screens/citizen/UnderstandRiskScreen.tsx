@@ -1,3 +1,4 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import React from 'react';
 import {
   View,
@@ -5,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
@@ -30,7 +30,7 @@ export function UnderstandRiskScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Understand your risk"
         subtitle="Cherrapunji · Location Risk Details"
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 40,
+    paddingBottom: 95,
   },
   analysisCard: {
     backgroundColor: '#FFFFFF',
