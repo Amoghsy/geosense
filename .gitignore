@@ -70,6 +70,25 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+backend/model_weights/*
+!backend/model_weights/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/results/*
+!backend/results/.gitkeep
+backend/tests/*.tif
+backend/tests/*.tiff
+backend/tests/*.h5
+backend/tests/*.hdf5
+backend/tests/*.jpg
+backend/tests/*.jpeg
+backend/tests/*.png
+backend/tests/*.txt
+backend/tests/sample_*
+*.tif
+*.tiff
+*.h5
+*.hdf5
 
 # Java and Kotlin tooling
 .gradle/

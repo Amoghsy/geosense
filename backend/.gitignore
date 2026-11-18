@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Environment
+.env
+
+# Model weights, datasets, uploads and results
+model_weights/*
+!model_weights/.gitkeep
+uploads/*
+!uploads/.gitkeep
+results/*
+!results/.gitkeep
+
+# Satellite rasters, images, and test data
+tests/*.tif
+tests/*.tiff
+tests/*.h5
+tests/*.hdf5
+tests/*.jpg
+tests/*.jpeg
+tests/*.png
+tests/*.txt
+tests/sample_*
+*.tif
+*.tiff
+*.h5
+*.hdf5
+
+# Testing and IDE
+.pytest_cache/
+.coverage
+htmlcov/
+.vscode/
+.idea/
