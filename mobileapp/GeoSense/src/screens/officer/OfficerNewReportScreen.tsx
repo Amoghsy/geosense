@@ -13,19 +13,42 @@ import {
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function OfficerNewReportScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation, currentUser } = useApp();
   const [severity, setSeverity] = useState<'Low' | 'Moderate' | 'High'>('High');
   const [incidentType, setIncidentType] = useState('Landslide / Rockfall');
-  const [description, setDescription] = useState(
-    'Fresh slope failure after heavy rainfall. Rocks and debris partially block the road. Soil remains unstable.'
-  );
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    Alert.alert('Report Submitted', 'Field report logged to central disaster operations console.', [
-      { text: 'Done', onPress: () => navigate('officer-home') },
-    ]);
+  const handleSubmit = async () => {
+    if (!description.trim()) {
+      Alert.alert('Missing Description', 'Please enter field observations before submitting.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await geoSenseApi.submitInspection({
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        location_name: selectedLocation.name,
+        state: currentUser?.assigned_state || 'Meghalaya',
+        district: currentUser?.assigned_district || 'East Khasi Hills',
+        observations: `[${incidentType} | Severity: ${severity}] ${description.trim()}`,
+        status: 'COMPLETED',
+        follow_up_required: severity === 'High',
+      });
+      Alert.alert(
+        'Inspection Logged',
+        `Field inspection ${res.inspection_id} saved to GeoSense backend.`,
+        [{ text: 'Done', onPress: () => navigate('officer-home') }]
+      );
+    } catch (err: any) {
+      Alert.alert('Submission Failed', err?.message || 'Unable to submit inspection.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -127,8 +150,10 @@ export function OfficerNewReportScreen() {
             <Ionicons name="location-outline" size={22} color="#00875A" />
           </View>
           <View style={styles.coordsInfo}>
-            <Text style={styles.coordsNumbers}>25.2700° N, 91.7300° E</Text>
-            <Text style={styles.coordsPlace}>Sohra slope · Current location</Text>
+            <Text style={styles.coordsNumbers}>
+              {selectedLocation.latitude.toFixed(4)}° N, {selectedLocation.longitude.toFixed(4)}° E
+            </Text>
+            <Text style={styles.coordsPlace}>{selectedLocation.name}</Text>
           </View>
           <TouchableOpacity style={styles.locateBtn}>
             <Feather name="crosshair" size={20} color="#00875A" />

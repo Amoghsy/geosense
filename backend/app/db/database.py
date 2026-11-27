@@ -671,11 +671,17 @@ def ensure_phase8_schema() -> None:
                 role TEXT NOT NULL DEFAULT 'CITIZEN',
                 assigned_state TEXT,
                 assigned_district TEXT,
+                officer_code TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             )
             """
         )
+        existing_user_cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        if "officer_code" not in existing_user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN officer_code TEXT")
 
         existing_inc_cols = {
             row["name"] for row in conn.execute("PRAGMA table_info(incidents)").fetchall()

@@ -89,15 +89,15 @@ export function ReportIncidentStep1Screen() {
         {/* Location Box */}
         <View style={styles.locationCard}>
           <View style={styles.locationHeaderRow}>
-            <Text style={styles.autoGpsLabel}>Auto GPS · Cherrapunji</Text>
+            <Text style={styles.autoGpsLabel}>Auto GPS · {incidentDraft.location}</Text>
             <View style={styles.accuracyPill}>
               <View style={styles.greenDot} />
-              <Text style={styles.accuracyText}>±4 m</Text>
+              <Text style={styles.accuracyText}>{incidentDraft.accuracy}</Text>
             </View>
           </View>
           <Text style={styles.coordsText}>{incidentDraft.coords}</Text>
-          <TouchableOpacity style={styles.chooseManualRow}>
-            <Text style={styles.chooseManualText}>Choose location manually</Text>
+          <TouchableOpacity style={styles.chooseManualRow} onPress={() => navigate('map')}>
+            <Text style={styles.chooseManualText}>Choose location on map</Text>
             <Feather name="arrow-right" size={14} color="#00875A" />
           </TouchableOpacity>
         </View>

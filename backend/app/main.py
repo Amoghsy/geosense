@@ -23,6 +23,7 @@ from app.api.role_routes import router as role_router
 from app.api.alert_routes import router as alert_router
 from app.ml.model_loader import get_model_manager
 from app.db.database import init_db
+from app.db.seed import seed_database
 
 # Configure logging
 logging.basicConfig(
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Initializing GeoSense Satellite Landslide Detection Backend...")
     init_db()
+    seed_database()
     manager = get_model_manager()
     logger.info(f"Target compute device: {manager.device}")
     logger.info(f"Configured Prithvi model repository: {manager.repo_id}")

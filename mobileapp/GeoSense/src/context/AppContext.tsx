@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { geoSenseApi } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { geoSenseApi, AuthUser } from '../services/api';
 
 export type UserRole = 'citizen' | 'officer';
 
@@ -32,9 +32,18 @@ export type ScreenName =
 
 export type TabName = 'home' | 'map' | 'missions' | 'alerts' | 'profile';
 
+export interface SelectedLocation {
+  name: string;
+  latitude: number;
+  longitude: number;
+  locationId?: string;
+}
+
 export interface IncidentReportDraft {
   type: string;
   location: string;
+  latitude: number;
+  longitude: number;
   coords: string;
   accuracy: string;
   description: string;
@@ -49,14 +58,57 @@ export interface IncidentReportDraft {
 export interface VerificationReport {
   id: string;
   title: string;
+  category: string;
   location: string;
-  distance: string;
+  latitude: number;
+  longitude: number;
   timeAgo: string;
   quote: string;
   submitter: string;
   severity: 'High' | 'Moderate';
-  photosCount: number;
   status: 'pending' | 'verified' | 'rejected';
+}
+
+function formatCoords(lat: number, lon: number): string {
+  const latDir = lat >= 0 ? 'N' : 'S';
+  const lonDir = lon >= 0 ? 'E' : 'W';
+  return `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lon).toFixed(4)}° ${lonDir}`;
+}
+
+export function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return 'Recently';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return 'Recently';
+  const diffSec = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
+const DEFAULT_LOCATION: SelectedLocation = {
+  name: 'Cherrapunji, Meghalaya',
+  latitude: 25.2702,
+  longitude: 91.7323,
+};
+
+function createDefaultDraft(loc: SelectedLocation = DEFAULT_LOCATION): IncidentReportDraft {
+  return {
+    type: 'Landslide',
+    location: loc.name,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    coords: formatCoords(loc.latitude, loc.longitude),
+    accuracy: '±5 m',
+    description: '',
+    time: new Date().toISOString(),
+    severity: 'High',
+    accessibility: 'Partially blocked',
+    peopleAffected: 'Not known',
+  };
 }
 
 interface AppContextType {
@@ -69,62 +121,37 @@ interface AppContextType {
   navigate: (screen: ScreenName) => void;
   goBack: () => void;
   canGoBack: boolean;
+
+  selectedLocation: SelectedLocation;
+  setSelectedLocation: (loc: SelectedLocation) => void;
+  latestAssessmentId: string | null;
+  setLatestAssessmentId: (id: string | null) => void;
+
   incidentDraft: IncidentReportDraft;
   updateIncidentDraft: (data: Partial<IncidentReportDraft>) => void;
   resetIncidentDraft: () => void;
+  submitIncidentToBackend: () => Promise<string>;
+
   verificationReports: VerificationReport[];
-  verifyReport: (id: string) => void;
-  rejectReport: (id: string) => void;
+  refreshOfficerIncidents: () => Promise<void>;
+  verifyReport: (id: string, notes?: string) => Promise<void>;
+  rejectReport: (id: string, notes?: string) => Promise<void>;
+
+  currentUser: AuthUser | null;
+  isRestoringSession: boolean;
   isLoggedInCitizen: boolean;
   isLoggedInOfficer: boolean;
   citizenName: string;
   citizenPhone: string;
   officerId: string;
-  loginCitizen: (name?: string, phone?: string) => void;
+
+  loginCitizen: (identifier: string, password: string) => Promise<void>;
+  registerCitizen: (fullName: string, email: string, phone: string, password: string) => Promise<void>;
   logoutCitizen: () => void;
-  loginOfficer: (id?: string) => void;
+  loginOfficer: (identifier: string, password: string) => Promise<void>;
   logoutOfficer: () => void;
-  submitIncidentToBackend: () => Promise<string | null>;
+  updateUserProfile: (fullName: string, phone: string) => Promise<void>;
 }
-
-const defaultIncidentDraft: IncidentReportDraft = {
-  type: 'Landslide',
-  location: 'Cherrapunji',
-  coords: '25.2702° N, 91.7323° E',
-  accuracy: '±4 m',
-  description: 'Fresh slope failure after heavy rainfall. Rocks and debris partially block the road. Soil remains unstable.',
-  severity: 'High',
-  accessibility: 'Partially blocked',
-  peopleAffected: 'Not known',
-  referenceId: 'GS-2026-01482',
-};
-
-const initialVerificationReports: VerificationReport[] = [
-  {
-    id: 'INC-2026-0842',
-    title: 'Rockfall near Sohra viewpoint',
-    location: 'Sohra, SH-5',
-    distance: '2.8 km away',
-    timeAgo: '12 min ago',
-    quote: 'Large rocks have fallen onto the road. Only one lane is open. More debris is coming down.',
-    submitter: 'B. Khongwir • Citizen submission',
-    severity: 'High',
-    photosCount: 3,
-    status: 'pending',
-  },
-  {
-    id: 'INC-2026-0841',
-    title: 'Cracks along roadside',
-    location: 'Mawsynram',
-    distance: '6.4 km away',
-    timeAgo: '28 min ago',
-    quote: 'Significant surface cracks observed stretching 15 meters along the mountain shoulder.',
-    submitter: 'L. Marak • Citizen submission',
-    severity: 'Moderate',
-    photosCount: 2,
-    status: 'pending',
-  },
-];
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -133,13 +160,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [portalTab, setPortalTab] = useState<'citizen' | 'officer'>('citizen');
   const [currentScreen, setCurrentScreen] = useState<ScreenName>('login-portal');
   const [history, setHistory] = useState<ScreenName[]>(['login-portal']);
-  const [incidentDraft, setIncidentDraft] = useState<IncidentReportDraft>(defaultIncidentDraft);
-  const [verificationReports, setVerificationReports] = useState<VerificationReport[]>(initialVerificationReports);
-  const [isLoggedInCitizen, setIsLoggedInCitizen] = useState<boolean>(false);
-  const [isLoggedInOfficer, setIsLoggedInOfficer] = useState<boolean>(false);
-  const [citizenName, setCitizenName] = useState<string>('Aiban Khonglah');
-  const [citizenPhone, setCitizenPhone] = useState<string>('+91 98630 01482');
-  const [officerId, setOfficerId] = useState<string>('FO-1027');
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation>(DEFAULT_LOCATION);
+  const [latestAssessmentId, setLatestAssessmentId] = useState<string | null>(null);
+  const [incidentDraft, setIncidentDraft] = useState<IncidentReportDraft>(() =>
+    createDefaultDraft(DEFAULT_LOCATION)
+  );
+  const [verificationReports, setVerificationReports] = useState<VerificationReport[]>([]);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isRestoringSession, setIsRestoringSession] = useState<boolean>(true);
+
+  const isLoggedInCitizen = currentUser?.role === 'CITIZEN';
+  const isLoggedInOfficer =
+    currentUser?.role === 'FIELD_OFFICER' ||
+    currentUser?.role === 'AUTHORITY' ||
+    currentUser?.role === 'ADMIN';
+
+  useEffect(() => {
+    let active = true;
+    const restore = async () => {
+      const token = geoSenseApi.getToken();
+      if (!token) {
+        if (active) setIsRestoringSession(false);
+        return;
+      }
+      try {
+        const user = await geoSenseApi.getMe();
+        if (!active) return;
+        setCurrentUser(user);
+        if (user.role === 'CITIZEN') {
+          setRole('citizen');
+          setPortalTab('citizen');
+          setCurrentScreen('citizen-home');
+          setHistory(['citizen-home']);
+        } else {
+          setRole('officer');
+          setPortalTab('officer');
+          setCurrentScreen('officer-home');
+          setHistory(['officer-home']);
+        }
+      } catch {
+        geoSenseApi.setToken(null);
+      } finally {
+        if (active) setIsRestoringSession(false);
+      }
+    };
+    restore();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const determineTab = (screen: ScreenName): TabName => {
     if (role === 'citizen') {
@@ -160,7 +229,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeTab = determineTab(currentScreen);
 
   const navigate = (screen: ScreenName) => {
-    // Determine role context
     if (screen === 'officer-login' || screen.startsWith('officer-')) {
       setRole('officer');
     } else if (screen !== 'login-portal') {
@@ -177,15 +245,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const prevScreen = nextHistory[nextHistory.length - 1];
       setHistory(nextHistory);
       setCurrentScreen(prevScreen);
+    } else if (isLoggedInOfficer) {
+      setCurrentScreen('officer-home');
+    } else if (isLoggedInCitizen) {
+      setCurrentScreen('citizen-home');
     } else {
-      // Default fallback
-      if (isLoggedInOfficer) {
-        setCurrentScreen('officer-home');
-      } else if (isLoggedInCitizen) {
-        setCurrentScreen('citizen-home');
-      } else {
-        setCurrentScreen('login-portal');
-      }
+      setCurrentScreen('login-portal');
     }
   };
 
@@ -194,71 +259,145 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const resetIncidentDraft = () => {
-    setIncidentDraft(defaultIncidentDraft);
+    setIncidentDraft(createDefaultDraft(selectedLocation));
   };
 
-  const verifyReport = (id: string) => {
+  const mapIncidentToVerification = (inc: any): VerificationReport => {
+    const rawCat = String(inc.incident_category || 'INCIDENT').replace(/_/g, ' ');
+    const titleCaseCat = rawCat.charAt(0).toUpperCase() + rawCat.slice(1).toLowerCase();
+    const rawStatus = String(inc.status || 'PENDING').toUpperCase();
+    const status: VerificationReport['status'] =
+      rawStatus === 'VERIFIED' ? 'verified' : rawStatus === 'REJECTED' ? 'rejected' : 'pending';
+    const isHigh =
+      inc.incident_category === 'LANDSLIDE' || inc.incident_category === 'FALLING_ROCKS';
+
+    return {
+      id: inc.id,
+      title: `${titleCaseCat}${inc.location_name ? ` — ${inc.location_name}` : ''}`,
+      category: titleCaseCat,
+      location: inc.location_name || `${Number(inc.latitude).toFixed(3)}, ${Number(inc.longitude).toFixed(3)}`,
+      latitude: Number(inc.latitude),
+      longitude: Number(inc.longitude),
+      timeAgo: formatRelativeTime(inc.created_at),
+      quote: inc.description || 'No description provided.',
+      submitter:
+        inc.reporter_type === 'officer'
+          ? 'Field Officer submission'
+          : `Citizen submission${inc.contact_info ? ` • ${inc.contact_info}` : ''}`,
+      severity: isHigh ? 'High' : 'Moderate',
+      status,
+    };
+  };
+
+  const refreshOfficerIncidents = async () => {
+    if (!geoSenseApi.getToken()) return;
+    const res = await geoSenseApi.getOfficerIncidents();
+    setVerificationReports((res.incidents || []).map(mapIncidentToVerification));
+  };
+
+  const verifyReport = async (id: string, notes?: string) => {
+    await geoSenseApi.verifyIncident(id, 'VERIFIED', notes || 'Verified from GeoSense Officer Mobile App');
     setVerificationReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'verified' } : r))
     );
-    if (geoSenseApi.getToken()) {
-      geoSenseApi.verifyIncident(id, 'VERIFIED', 'Verified from GeoSense Officer Mobile App').catch(() => {});
-    }
   };
 
-  const rejectReport = (id: string) => {
+  const rejectReport = async (id: string, notes?: string) => {
+    await geoSenseApi.verifyIncident(id, 'REJECTED', notes || 'Rejected from GeoSense Officer Mobile App');
     setVerificationReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
     );
-    if (geoSenseApi.getToken()) {
-      geoSenseApi.verifyIncident(id, 'REJECTED', 'Rejected from GeoSense Officer Mobile App').catch(() => {});
-    }
   };
 
-  const submitIncidentToBackend = async (): Promise<string | null> => {
-    if (!geoSenseApi.getToken()) return null;
-    try {
-      const res = await geoSenseApi.submitIncident({
-        incident_category: incidentDraft.type.toUpperCase().replace(/\s+/g, '_'),
-        description: incidentDraft.description,
-        latitude: 25.5788,
-        longitude: 91.8933,
-        location_name: incidentDraft.location,
-      });
-      updateIncidentDraft({ referenceId: res.incident_id });
-      return res.incident_id;
-    } catch {
-      return null;
+  const submitIncidentToBackend = async (): Promise<string> => {
+    if (!geoSenseApi.getToken()) {
+      throw new Error('Please sign in before submitting an incident report.');
     }
+    const categoryMap: Record<string, string> = {
+      Landslide: 'LANDSLIDE',
+      'Falling Rocks': 'FALLING_ROCKS',
+      'Road Blockage': 'ROAD_BLOCKAGE',
+      'Slope Cracks': 'SLOPE_CRACKS',
+      Flooding: 'FLOODING',
+      'Damaged Infrastructure': 'DAMAGED_INFRASTRUCTURE',
+    };
+    const mappedCategory =
+      categoryMap[incidentDraft.type] ||
+      incidentDraft.type.toUpperCase().replace(/\s+/g, '_');
+
+    const res = await geoSenseApi.submitIncident({
+      incident_category: mappedCategory,
+      description:
+        incidentDraft.description.trim() ||
+        `${incidentDraft.type} reported near ${incidentDraft.location} (Severity: ${incidentDraft.severity}, Road: ${incidentDraft.accessibility})`,
+      latitude: incidentDraft.latitude,
+      longitude: incidentDraft.longitude,
+      location_name: incidentDraft.location,
+      state: currentUser?.assigned_state || 'Meghalaya',
+      district: currentUser?.assigned_district || 'East Khasi Hills',
+      incident_time: incidentDraft.time || new Date().toISOString(),
+      contact_info: currentUser?.phone || undefined,
+    });
+    updateIncidentDraft({ referenceId: res.incident_id });
+    return res.incident_id;
   };
 
-  const loginCitizen = (name?: string, phone?: string) => {
-    if (name && name.trim()) setCitizenName(name.trim());
-    if (phone && phone.trim()) setCitizenPhone(phone.trim());
-    setIsLoggedInCitizen(true);
+  const loginCitizen = async (identifier: string, password: string) => {
+    const res = await geoSenseApi.login(identifier, password);
+    setCurrentUser(res.user);
     setRole('citizen');
-    navigate('citizen-home');
+    setPortalTab('citizen');
+    setHistory(['citizen-home']);
+    setCurrentScreen('citizen-home');
+  };
+
+  const registerCitizen = async (
+    fullName: string,
+    email: string,
+    phone: string,
+    password: string
+  ) => {
+    const res = await geoSenseApi.registerCitizen(email, password, fullName, phone);
+    setCurrentUser(res.user);
+    setRole('citizen');
+    setPortalTab('citizen');
+    setHistory(['citizen-home']);
+    setCurrentScreen('citizen-home');
   };
 
   const logoutCitizen = () => {
     geoSenseApi.setToken(null);
-    setIsLoggedInCitizen(false);
+    setCurrentUser(null);
     setPortalTab('citizen');
-    navigate('login-portal');
+    setHistory(['login-portal']);
+    setCurrentScreen('login-portal');
   };
 
-  const loginOfficer = (id?: string) => {
-    if (id && id.trim()) setOfficerId(id.trim());
-    setIsLoggedInOfficer(true);
+  const loginOfficer = async (identifier: string, password: string) => {
+    const res = await geoSenseApi.login(identifier, password);
+    if (res.user.role === 'CITIZEN') {
+      geoSenseApi.setToken(null);
+      throw new Error('This account is a Citizen account. Use Field Officer credentials.');
+    }
+    setCurrentUser(res.user);
     setRole('officer');
-    navigate('officer-home');
+    setPortalTab('officer');
+    setHistory(['officer-home']);
+    setCurrentScreen('officer-home');
   };
 
   const logoutOfficer = () => {
     geoSenseApi.setToken(null);
-    setIsLoggedInOfficer(false);
+    setCurrentUser(null);
+    setVerificationReports([]);
     setPortalTab('officer');
-    navigate('login-portal');
+    setHistory(['login-portal']);
+    setCurrentScreen('login-portal');
+  };
+
+  const updateUserProfile = async (fullName: string, phone: string) => {
+    const updated = await geoSenseApi.updateMe({ full_name: fullName, phone });
+    setCurrentUser(updated);
   };
 
   return (
@@ -273,22 +412,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
         navigate,
         goBack,
         canGoBack: history.length > 1,
+        selectedLocation,
+        setSelectedLocation,
+        latestAssessmentId,
+        setLatestAssessmentId,
         incidentDraft,
         updateIncidentDraft,
         resetIncidentDraft,
+        submitIncidentToBackend,
         verificationReports,
+        refreshOfficerIncidents,
         verifyReport,
         rejectReport,
+        currentUser,
+        isRestoringSession,
         isLoggedInCitizen,
         isLoggedInOfficer,
-        citizenName,
-        citizenPhone,
-        officerId,
+        citizenName: currentUser?.full_name || '',
+        citizenPhone: currentUser?.phone || '',
+        officerId: currentUser?.officer_code || currentUser?.user_id || '',
         loginCitizen,
+        registerCitizen,
         logoutCitizen,
         loginOfficer,
         logoutOfficer,
-        submitIncidentToBackend,
+        updateUserProfile,
       }}>
       {children}
     </AppContext.Provider>

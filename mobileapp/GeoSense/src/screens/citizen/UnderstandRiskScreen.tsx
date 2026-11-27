@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,17 +10,63 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function UnderstandRiskScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation, latestAssessmentId } = useApp();
+  const [factors, setFactors] = useState<{ label: string; percentage: number }[]>([]);
+  const [explanationText, setExplanationText] = useState<string>(
+    'Analyzing environmental risk factors for this location...'
+  );
 
-  const factors = [
-    { label: 'Heavy Rainfall', percentage: 42 },
-    { label: 'Steep Slope', percentage: 27 },
-    { label: 'Historical Landslides', percentage: 18 },
-    { label: 'Soil Saturation', percentage: 9 },
-    { label: 'Land Cover Change', percentage: 4 },
-  ];
+  useEffect(() => {
+    let active = true;
+    const loadXai = async () => {
+      try {
+        let assId = latestAssessmentId;
+        if (!assId) {
+          const risk = await geoSenseApi.getCitizenRisk(
+            selectedLocation.latitude,
+            selectedLocation.longitude,
+            selectedLocation.name
+          );
+          if (risk?.location_id) {
+            const latest = await geoSenseApi.getLatestRisk(risk.location_id).catch(() => null);
+            assId = latest?.assessment_id || null;
+          }
+        }
+        if (!assId) return;
+        const xai = await geoSenseApi.getRiskExplanation(assId);
+        if (!active || !xai) return;
+
+        const contribs = xai.factor_contributions || [];
+        const total = contribs.reduce(
+          (sum: number, c: any) => sum + Math.max(0, Number(c.weighted_contribution || c.raw_score || 0)),
+          0
+        );
+        const mapped = contribs.map((c: any) => {
+          const val = Math.max(0, Number(c.weighted_contribution || c.raw_score || 0));
+          const pct = total > 0 ? Math.round((val / total) * 100) : Math.round(Number(c.raw_score || 0));
+          return {
+            label: String(c.factor || c.name || 'Factor').replace(/_/g, ' '),
+            percentage: Math.min(100, Math.max(0, pct)),
+          };
+        });
+        setFactors(mapped);
+        if (xai.explanation_text) {
+          setExplanationText(xai.explanation_text);
+        }
+      } catch {
+        if (active) {
+          setExplanationText('Unable to load detailed XAI breakdown from backend.');
+        }
+      }
+    };
+    loadXai();
+    return () => {
+      active = false;
+    };
+  }, [latestAssessmentId, selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name]);
 
   const actions = [
     'Avoid travelling through unstable slopes',
@@ -33,7 +79,7 @@ export function UnderstandRiskScreen() {
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Understand your risk"
-        subtitle="Cherrapunji · Location Risk Details"
+        subtitle={`${selectedLocation.name} · XAI Breakdown`}
         variant="sub-light"
       />
 
@@ -51,29 +97,33 @@ export function UnderstandRiskScreen() {
 
           {/* Progress bars list */}
           <View style={styles.barsContainer}>
-            {factors.map((f, i) => (
-              <View key={i} style={styles.barItem}>
-                <View style={styles.barLabelsRow}>
-                  <Text style={styles.barLabel}>{f.label}</Text>
-                  <Text style={styles.barPercentage}>{f.percentage}%</Text>
+            {factors.length === 0 ? (
+              <Text style={{ color: '#64748B', fontSize: 13 }}>
+                Loading explainable AI factor contributions...
+              </Text>
+            ) : (
+              factors.map((f, i) => (
+                <View key={i} style={styles.barItem}>
+                  <View style={styles.barLabelsRow}>
+                    <Text style={styles.barLabel}>{f.label}</Text>
+                    <Text style={styles.barPercentage}>{f.percentage}%</Text>
+                  </View>
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${f.percentage}%` },
+                      ]}
+                    />
+                  </View>
                 </View>
-                <View style={styles.progressBarTrack}>
-                  <View
-                    style={[
-                      styles.progressBarFill,
-                      { width: `${f.percentage}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
 
           {/* Explanation Callout */}
           <View style={styles.explanationBox}>
-            <Text style={styles.explanationText}>
-              Recent heavy rainfall combined with steep terrain and high soil saturation has increased the landslide probability in this area.
-            </Text>
+            <Text style={styles.explanationText}>{explanationText}</Text>
           </View>
         </View>
 

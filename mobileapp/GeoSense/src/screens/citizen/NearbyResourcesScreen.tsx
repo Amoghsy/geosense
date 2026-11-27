@@ -1,80 +1,89 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
+
+const CATEGORY_TO_API: Record<string, string | undefined> = {
+  All: undefined,
+  Shelters: 'SHELTER',
+  Hospitals: 'HOSPITAL',
+  'Rescue Teams': 'RESCUE_TEAM',
+  'Relief Centres': 'RELIEF_CENTRE',
+};
 
 export function NearbyResourcesScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation } = useApp();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [resources, setResources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const categories = ['All', 'Shelters', 'Hospitals', 'Rescue Teams', 'Relief Centres'];
 
-  const resources = [
-    {
-      id: '1',
-      title: 'Community Shelter A',
-      type: 'Shelters',
-      categoryDesc: 'Shelter · 84 / 150 places open',
-      distance: '2.8 km',
-      status: 'Available',
-      icon: <Feather name="home" size={22} color="#00875A" />,
-      hasAction: true,
-    },
-    {
-      id: '2',
-      title: 'Government School Shelter',
-      type: 'Shelters',
-      categoryDesc: 'Shelter · 120 / 200 places open',
-      distance: '3.6 km',
-      status: 'Available',
-      icon: <MaterialCommunityIcons name="school-outline" size={22} color="#00875A" />,
-      hasAction: false,
-    },
-    {
-      id: '3',
-      title: 'District Hospital',
-      type: 'Hospitals',
-      categoryDesc: 'Hospital · 24-hour emergency care',
-      distance: '5.2 km',
-      status: 'Available',
-      icon: <MaterialCommunityIcons name="hospital-box-outline" size={22} color="#00875A" />,
-      hasAction: false,
-    },
-    {
-      id: '4',
-      title: 'Rescue Team North',
-      type: 'Rescue Teams',
-      categoryDesc: 'Rescue team · Community response',
-      distance: '4.1 km',
-      status: 'Active',
-      icon: <MaterialCommunityIcons name="shield-account-outline" size={22} color="#00875A" />,
-      hasAction: false,
-    },
-    {
-      id: '5',
-      title: 'Relief Supply Centre',
-      type: 'Relief Centres',
-      categoryDesc: 'Relief centre · Food, water & first aid',
-      distance: '6.3 km',
-      status: 'Available',
-      icon: <Feather name="box" size={22} color="#00875A" />,
-      hasAction: false,
-    },
-  ];
+  useEffect(() => {
+    let active = true;
+    const loadResources = async () => {
+      setLoading(true);
+      try {
+        const res = await geoSenseApi.getNearbyVerifiedResources(
+          selectedLocation.latitude,
+          selectedLocation.longitude,
+          50,
+          CATEGORY_TO_API[selectedCategory]
+        );
+        if (active) {
+          setResources(res?.resources || []);
+        }
+      } catch {
+        if (active) setResources([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadResources();
+    return () => {
+      active = false;
+    };
+  }, [selectedLocation.latitude, selectedLocation.longitude, selectedCategory]);
 
-  const filteredResources = resources.filter(
-    (r) => selectedCategory === 'All' || r.type === selectedCategory
-  );
+  const getResourceIcon = (rtype: string) => {
+    switch (String(rtype).toUpperCase()) {
+      case 'HOSPITAL':
+        return <MaterialCommunityIcons name="hospital-box-outline" size={22} color="#00875A" />;
+      case 'RESCUE_TEAM':
+        return <MaterialCommunityIcons name="shield-account-outline" size={22} color="#00875A" />;
+      case 'RELIEF_CENTRE':
+        return <Feather name="box" size={22} color="#00875A" />;
+      default:
+        return <Feather name="home" size={22} color="#00875A" />;
+    }
+  };
+
+  const filteredResources = resources.map((r, idx) => {
+    const cap = r.capacity ?? 0;
+    const occ = r.current_occupancy ?? 0;
+    const open = Math.max(0, cap - occ);
+    const rtypeLabel = String(r.resource_type || 'RESOURCE').replace(/_/g, ' ');
+    const capDesc = cap > 0 ? `${open} / ${cap} places open` : (r.description || '24-hour emergency support');
+    return {
+      id: r.id,
+      title: r.resource_name || r.name,
+      categoryDesc: `${rtypeLabel} · ${capDesc}`,
+      distance: r.distance_km !== undefined ? `${Number(r.distance_km).toFixed(1)} km` : 'Nearby',
+      status: r.availability_status || r.operational_status || 'AVAILABLE',
+      icon: getResourceIcon(r.resource_type),
+      hasAction: idx === 0,
+    };
+  });
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -87,7 +96,7 @@ export function NearbyResourcesScreen() {
           onPress={() => navigate('map')}
           activeOpacity={0.7}>
           <Ionicons name="location-outline" size={18} color="#00875A" />
-          <Text style={styles.locationText}>Cherrapunji, Meghalaya</Text>
+          <Text style={styles.locationText}>{selectedLocation.name}</Text>
           <Feather name="chevron-down" size={16} color="#00875A" />
         </TouchableOpacity>
       </View>
@@ -151,6 +160,16 @@ export function NearbyResourcesScreen() {
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
+        {loading && (
+          <Text style={{ textAlign: 'center', color: '#64748B', paddingVertical: 24 }}>
+            Searching verified emergency resources...
+          </Text>
+        )}
+        {!loading && filteredResources.length === 0 && (
+          <Text style={{ textAlign: 'center', color: '#64748B', paddingVertical: 24 }}>
+            No verified resources found within 50 km.
+          </Text>
+        )}
         {filteredResources.map((item) => (
           <View
             key={item.id}

@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,62 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function OfficerHomeScreen() {
-  const { navigate } = useApp();
+  const { navigate, currentUser, officerId } = useApp();
+  const [dashboard, setDashboard] = useState<any | null>(null);
+  const [alertsCount, setAlertsCount] = useState<number>(0);
+  const [lastSynced, setLastSynced] = useState<string>('Syncing...');
 
-  const handleSyncData = () => {
-    Alert.alert('Sync Successful', 'All mission reports and offline tiles are up to date.');
+  const loadDashboard = async () => {
+    try {
+      const [dash, alr] = await Promise.all([
+        geoSenseApi.getOfficerDashboard(),
+        geoSenseApi.getAlerts({ limit: 50 }).catch(() => ({ count: 0, alerts: [] })),
+      ]);
+      setDashboard(dash);
+      setAlertsCount(alr?.count ?? alr?.alerts?.length ?? 0);
+      setLastSynced(`Synced at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+    } catch {
+      setLastSynced('Offline / unable to sync');
+    }
   };
+
+  useEffect(() => {
+    if (geoSenseApi.getToken()) {
+      loadDashboard();
+    }
+  }, []);
+
+  const handleSyncData = async () => {
+    await loadDashboard();
+    Alert.alert('Sync Successful', 'All mission reports, incidents, and alerts are up to date.');
+  };
+
+  const todayStr = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).toUpperCase();
+  const firstName = (currentUser?.full_name || 'Officer').split(' ')[0];
+  const district = currentUser?.assigned_district || currentUser?.assigned_state || 'Meghalaya';
+  const missions: any[] = [
+    ...(dashboard?.inspections || []).slice(0, 2).map((insp: any) => ({
+      id: insp.inspection_id,
+      title: insp.location_name || insp.location_id,
+      sub: `Inspection • ${insp.status}`,
+      badge: insp.risk_category_snapshot || 'ACTIVE',
+    })),
+    ...(dashboard?.incidents || []).filter((i: any) => i.status === 'PENDING').slice(0, 2).map((inc: any) => ({
+      id: inc.id,
+      title: inc.location_name || inc.incident_category,
+      sub: `Incident verification • ${formatRelativeTime(inc.created_at)}`,
+      badge: inc.status,
+    })),
+  ].slice(0, 3);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -30,7 +78,7 @@ export function OfficerHomeScreen() {
         
         {/* Date and On-Duty Badge */}
         <View style={styles.dateRow}>
-          <Text style={styles.dateText}>WEDNESDAY, 17 JUNE 2026</Text>
+          <Text style={styles.dateText}>{todayStr}</Text>
           <View style={styles.onDutyBadge}>
             <View style={styles.onDutyDot} />
             <Text style={styles.onDutyText}>On Duty</Text>
@@ -39,13 +87,13 @@ export function OfficerHomeScreen() {
 
         {/* Greeting & Officer Badge */}
         <View style={styles.greetingBox}>
-          <Text style={styles.greetingTitle}>Hello, Riban 👋</Text>
+          <Text style={styles.greetingTitle}>Hello, {firstName}</Text>
           <Text style={styles.officerSubtitle}>
-            FO-1027 • East Khasi Hills district
+            {officerId} • {district}
           </Text>
         </View>
 
-        {/* 3 Active Alerts Banner */}
+        {/* Active Alerts Banner */}
         <TouchableOpacity
           style={styles.activeAlertsBanner}
           onPress={() => navigate('officer-alerts')}
@@ -55,8 +103,10 @@ export function OfficerHomeScreen() {
               <Ionicons name="warning-outline" size={24} color="#FFFFFF" />
             </View>
             <View>
-              <Text style={styles.activeAlertsTitle}>3 Active Alerts</Text>
-              <Text style={styles.activeAlertsSub}>High-risk locations need attention</Text>
+              <Text style={styles.activeAlertsTitle}>{alertsCount} Active Alerts</Text>
+              <Text style={styles.activeAlertsSub}>
+                {dashboard?.pending_incidents_count ?? 0} pending incidents need verification
+              </Text>
             </View>
           </View>
           <Feather name="arrow-up-right" size={24} color="#FFFFFF" />
@@ -137,52 +187,45 @@ export function OfficerHomeScreen() {
         <View style={styles.missionsHeaderRow}>
           <Text style={styles.sectionTitle}>Today’s Missions</Text>
           <TouchableOpacity onPress={() => navigate('officer-mission')} activeOpacity={0.7}>
-            <Text style={styles.viewAllText}>View all (3)</Text>
+            <Text style={styles.viewAllText}>View all ({missions.length})</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.missionsCard}>
-          {/* Mission 1: Sohra Slope S1 */}
-          <TouchableOpacity
-            style={styles.missionItem}
-            onPress={() => navigate('officer-mission')}
-            activeOpacity={0.7}>
-            <View style={styles.missionPinBox}>
-              <Feather name="map-pin" size={18} color="#00875A" />
-            </View>
-            <View style={styles.missionInfo}>
-              <Text style={styles.missionTitle}>Sohra slope · S1</Text>
-              <Text style={styles.missionSub}>Slope inspection • 2.8 km</Text>
-            </View>
-            <View style={styles.highPriorityBadge}>
-              <Text style={styles.highPriorityText}>High priority</Text>
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.missionDivider} />
-
-          {/* Mission 2: Mawsynram Road R2 */}
-          <TouchableOpacity
-            style={styles.missionItem}
-            onPress={() => navigate('officer-mission')}
-            activeOpacity={0.7}>
-            <View style={styles.missionPinBox}>
-              <Feather name="map-pin" size={18} color="#00875A" />
-            </View>
-            <View style={styles.missionInfo}>
-              <Text style={styles.missionTitle}>Mawsynram road · R2</Text>
-              <Text style={styles.missionSub}>Incident verification • 6.4 km</Text>
-            </View>
-            <View style={styles.pendingBadge}>
-              <Text style={styles.pendingText}>Pending</Text>
-            </View>
-          </TouchableOpacity>
+          {missions.length === 0 ? (
+            <Text style={{ padding: 16, color: '#64748B', fontSize: 13 }}>
+              No active missions or pending incidents.
+            </Text>
+          ) : (
+            missions.map((m, idx) => (
+              <React.Fragment key={m.id}>
+                {idx > 0 && <View style={styles.missionDivider} />}
+                <TouchableOpacity
+                  style={styles.missionItem}
+                  onPress={() => navigate('officer-mission')}
+                  activeOpacity={0.7}>
+                  <View style={styles.missionPinBox}>
+                    <Feather name="map-pin" size={18} color="#00875A" />
+                  </View>
+                  <View style={styles.missionInfo}>
+                    <Text style={styles.missionTitle}>{m.title}</Text>
+                    <Text style={styles.missionSub}>{m.sub}</Text>
+                  </View>
+                  <View style={m.badge === 'CRITICAL' || m.badge === 'HIGH' ? styles.highPriorityBadge : styles.pendingBadge}>
+                    <Text style={m.badge === 'CRITICAL' || m.badge === 'HIGH' ? styles.highPriorityText : styles.pendingText}>
+                      {m.badge}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </React.Fragment>
+            ))
+          )}
         </View>
 
         {/* Sync Status Footer */}
         <View style={styles.syncFooterRow}>
           <Feather name="cloud" size={14} color="#00875A" />
-          <Text style={styles.syncFooterText}>All changes synced at 09:32 AM</Text>
+          <Text style={styles.syncFooterText}>{lastSynced}</Text>
         </View>
 
       </ScrollView>

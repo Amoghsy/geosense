@@ -9,83 +9,117 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
 import { geoSenseApi } from '@/services/api';
+
+interface DisplayAlert {
+  id: string;
+  notificationId?: string;
+  category: string;
+  title: string;
+  titleColor: string;
+  location: string;
+  time: string;
+  desc: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  isUnread: boolean;
+  targetScreen: 'location-details' | 'safety-outlook' | 'evacuation';
+}
 
 export function AlertsScreen() {
   const { navigate } = useApp();
   const [selectedFilter, setSelectedFilter] = useState('All');
-  const [unreadCount, setUnreadCount] = useState(2);
-  const [liveAlerts, setLiveAlerts] = useState<any[] | null>(null);
+  const [alerts, setAlerts] = useState<DisplayAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const mapBackendItem = (item: any, isNotification: boolean): DisplayAlert => {
+    const severity = String(item.severity || 'WARNING').toUpperCase();
+    const title = String(item.title || 'GeoSense Alert');
+    const titleUpper = title.toUpperCase();
+
+    let category = 'Advisory';
+    let targetScreen: DisplayAlert['targetScreen'] = 'evacuation';
+    let iconBg = '#D1FAE5';
+    let titleColor = '#059669';
+    let icon: React.ReactNode = <MaterialCommunityIcons name="call-split" size={22} color="#059669" />;
+
+    if (severity === 'CRITICAL' || titleUpper.includes('LANDSLIDE')) {
+      category = 'High Risk';
+      targetScreen = 'location-details';
+      iconBg = '#FEE2E2';
+      titleColor = '#EF4444';
+      icon = <Ionicons name="warning-outline" size={22} color="#EF4444" />;
+    } else if (titleUpper.includes('RAIN') || titleUpper.includes('WEATHER')) {
+      category = 'Weather';
+      targetScreen = 'safety-outlook';
+      iconBg = '#FEF3C7';
+      titleColor = '#D97706';
+      icon = <Feather name="cloud-rain" size={22} color="#D97706" />;
+    } else if (titleUpper.includes('ROAD') || titleUpper.includes('BLOCK')) {
+      category = 'Road Updates';
+      targetScreen = 'evacuation';
+      iconBg = '#FFEDD5';
+      titleColor = '#EA580C';
+      icon = <MaterialCommunityIcons name="road-variant" size={22} color="#EA580C" />;
+    }
+
+    return {
+      id: item.alert_id || item.notification_id,
+      notificationId: isNotification ? item.notification_id : undefined,
+      category,
+      title,
+      titleColor,
+      location: item.location_name || item.state || 'Meghalaya',
+      time: formatRelativeTime(item.published_at || item.created_at),
+      desc: item.message || item.description || '',
+      icon,
+      iconBg,
+      isUnread: isNotification ? !item.is_read : false,
+      targetScreen,
+    };
+  };
 
   useEffect(() => {
-    if (!geoSenseApi.getToken()) return;
-    geoSenseApi.getNotifications()
-      .then((res) => {
-        if (res?.notifications?.length) {
-          setLiveAlerts(res.notifications);
-          setUnreadCount(res.notifications.filter((n) => !n.is_read).length);
+    let active = true;
+    const loadAlerts = async () => {
+      if (!geoSenseApi.getToken()) {
+        if (active) setLoading(false);
+        return;
+      }
+      try {
+        const [notifRes, alertRes] = await Promise.all([
+          geoSenseApi.getNotifications().catch(() => ({ notifications: [] })),
+          geoSenseApi.getAlerts().catch(() => ({ alerts: [] })),
+        ]);
+        if (!active) return;
+        const notifs = (notifRes?.notifications || []).map((n: any) => mapBackendItem(n, true));
+        if (notifs.length > 0) {
+          setAlerts(notifs);
+        } else {
+          setAlerts((alertRes?.alerts || []).map((a: any) => mapBackendItem(a, false)));
         }
-      })
-      .catch(() => {});
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadAlerts();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const filters = ['All', 'High Risk', 'Weather', 'Road Updates', 'Advisory'];
+  const unreadCount = alerts.filter((a) => a.isUnread).length;
 
-  const alerts = [
-    {
-      id: '1',
-      category: 'High Risk',
-      title: 'HIGH LANDSLIDE RISK',
-      titleColor: '#EF4444',
-      location: 'Cherrapunji',
-      time: '5 min ago',
-      desc: '87% landslide probability · Next 6 Hours. Avoid unstable slopes and mountain roads.',
-      icon: <Ionicons name="warning-outline" size={22} color="#EF4444" />,
-      iconBg: '#FEE2E2',
-      isUnread: true,
-      targetScreen: 'location-details' as const,
-    },
-    {
-      id: '2',
-      category: 'Weather',
-      title: 'HEAVY RAINFALL WARNING',
-      titleColor: '#D97706',
-      location: 'Meghalaya East',
-      time: '18 min ago',
-      desc: 'Heavy rainfall expected over the Next 24 Hours. Stay alert for rapid changes.',
-      icon: <Feather name="cloud-rain" size={22} color="#D97706" />,
-      iconBg: '#FEF3C7',
-      isUnread: true,
-      targetScreen: 'safety-outlook' as const,
-    },
-    {
-      id: '3',
-      category: 'Road Updates',
-      title: 'ROAD BLOCKAGE UPDATE',
-      titleColor: '#EA580C',
-      location: 'NH-206',
-      time: '42 min ago',
-      desc: 'Partial blockage reported near Sohra. Use alternate routes and travel with care.',
-      icon: <MaterialCommunityIcons name="road-variant" size={22} color="#EA580C" />,
-      iconBg: '#FFEDD5',
-      isUnread: false,
-      targetScreen: 'evacuation' as const,
-    },
-    {
-      id: '4',
-      category: 'Advisory',
-      title: 'EVACUATION ADVISORY',
-      titleColor: '#059669',
-      location: 'High-risk villages',
-      time: '1 hour ago',
-      desc: 'Keep essentials ready. Follow local authority instructions and designated safe routes.',
-      icon: <MaterialCommunityIcons name="call-split" size={22} color="#059669" />,
-      iconBg: '#D1FAE5',
-      isUnread: false,
-      targetScreen: 'evacuation' as const,
-    },
-  ];
+  const handleMarkAllRead = async () => {
+    const unread = alerts.filter((a) => a.isUnread && a.notificationId);
+    setAlerts((prev) => prev.map((a) => ({ ...a, isUnread: false })));
+    await Promise.all(
+      unread.map((u) => geoSenseApi.markNotificationRead(u.notificationId!).catch(() => null))
+    );
+  };
+
+  const filters = ['All', 'High Risk', 'Weather', 'Road Updates', 'Advisory'];
 
   const filteredAlerts = alerts.filter(
     (a) => selectedFilter === 'All' || a.category === selectedFilter
@@ -121,7 +155,7 @@ export function AlertsScreen() {
       {/* Subheader: Today unread count & Mark all as read */}
       <View style={styles.subHeaderRow}>
         <Text style={styles.todayCountText}>Today · {unreadCount} unread</Text>
-        <TouchableOpacity onPress={() => setUnreadCount(0)}>
+        <TouchableOpacity onPress={handleMarkAllRead}>
           <Text style={styles.markReadText}>Mark all as read</Text>
         </TouchableOpacity>
       </View>
@@ -131,6 +165,16 @@ export function AlertsScreen() {
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
+        {loading && (
+          <Text style={{ textAlign: 'center', color: '#64748B', paddingVertical: 24 }}>
+            Loading alerts from GeoSense server...
+          </Text>
+        )}
+        {!loading && filteredAlerts.length === 0 && (
+          <Text style={{ textAlign: 'center', color: '#64748B', paddingVertical: 24 }}>
+            No published alerts in this category.
+          </Text>
+        )}
         {filteredAlerts.map((alert) => (
           <View key={alert.id} style={styles.alertCard}>
             <View style={styles.cardTopRow}>

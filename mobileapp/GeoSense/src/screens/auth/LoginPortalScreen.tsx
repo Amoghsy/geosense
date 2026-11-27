@@ -4,6 +4,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -22,10 +23,8 @@ export function LoginPortalScreen() {
     portalTab,
     setPortalTab,
     loginCitizen,
+    registerCitizen,
     loginOfficer,
-    citizenName: defaultCitizenName,
-    citizenPhone: defaultCitizenPhone,
-    officerId: defaultOfficerId,
   } = useApp();
 
   const insets = useSafeAreaInsets();
@@ -35,25 +34,63 @@ export function LoginPortalScreen() {
   );
   const bottomInset = Math.max(insets.bottom, 24);
 
-  // Citizen Form state
-  const [citizenName, setCitizenName] = useState(defaultCitizenName || 'Aiban Khonglah');
-  const [citizenPhone, setCitizenPhone] = useState(defaultCitizenPhone || '+91 98630 01482');
+  // Citizen Auth mode: 'login' | 'register'
+  const [citizenMode, setCitizenMode] = useState<'login' | 'register'>('login');
+  const [citizenIdentifier, setCitizenIdentifier] = useState('aiban@geosense.in');
+  const [citizenName, setCitizenName] = useState('');
+  const [citizenEmail, setCitizenEmail] = useState('');
+  const [citizenPhone, setCitizenPhone] = useState('');
+  const [citizenPassword, setCitizenPassword] = useState('password123');
+  const [showCitizenPassword, setShowCitizenPassword] = useState(false);
 
   // Officer Form state
-  const [officerId, setOfficerId] = useState(defaultOfficerId || 'FO-1027');
+  const [officerId, setOfficerId] = useState('FO-1027');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  const handleCitizenSubmit = () => {
-    loginCitizen(citizenName, citizenPhone);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const handleCitizenSubmit = async () => {
+    setAuthError(null);
+    setIsSubmitting(true);
+    try {
+      if (citizenMode === 'login') {
+        if (!citizenIdentifier.trim() || !citizenPassword) {
+          throw new Error('Please enter your email/phone and password.');
+        }
+        await loginCitizen(citizenIdentifier, citizenPassword);
+      } else {
+        if (!citizenName.trim() || !citizenEmail.trim() || citizenPassword.length < 6) {
+          throw new Error('Enter your full name, valid email, and a password (min 6 chars).');
+        }
+        await registerCitizen(citizenName, citizenEmail, citizenPhone, citizenPassword);
+      }
+    } catch (err: any) {
+      setAuthError(err?.message || 'Authentication failed. Check your connection.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleOfficerSubmit = () => {
-    loginOfficer(officerId);
+  const handleOfficerSubmit = async () => {
+    setAuthError(null);
+    setIsSubmitting(true);
+    try {
+      if (!officerId.trim() || !password) {
+        throw new Error('Please enter your Officer ID / Email and password.');
+      }
+      await loginOfficer(officerId, password);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Officer login failed. Check your credentials.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectOfficerPreset = (presetId: string) => {
+    setAuthError(null);
     setOfficerId(presetId);
     setPassword('password123');
   };
@@ -171,48 +208,170 @@ export function LoginPortalScreen() {
 
                   <Text style={styles.cardTitle}>Stay Alert. Stay Safe.</Text>
                   <Text style={styles.cardSubtitle}>
-                    Live landslide probability, safe evacuation corridors, real-time risk analysis, and community reporting.
+                    Sign in or register for live landslide probability, evacuation corridors, and community reporting.
                   </Text>
                 </View>
 
-                {/* Citizen Input 1: Name */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.fieldLabel}>Resident / Visitor Name</Text>
-                  <View style={styles.inputContainer}>
-                    <Feather name="user" size={18} color="#64748B" style={styles.fieldIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={citizenName}
-                      onChangeText={setCitizenName}
-                      placeholder="e.g. Aiban Khonglah"
-                      placeholderTextColor="#94A3B8"
-                    />
-                  </View>
+                {/* Sign In / Register Switch */}
+                <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 10, padding: 4, marginBottom: 14 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: citizenMode === 'login' ? '#FFFFFF' : 'transparent',
+                    }}
+                    onPress={() => { setCitizenMode('login'); setAuthError(null); }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: citizenMode === 'login' ? '#064E3B' : '#64748B' }}>
+                      Sign In
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: citizenMode === 'register' ? '#FFFFFF' : 'transparent',
+                    }}
+                    onPress={() => { setCitizenMode('register'); setAuthError(null); }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: citizenMode === 'register' ? '#064E3B' : '#64748B' }}>
+                      Create Account
+                    </Text>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Citizen Input 2: Mobile Number */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.fieldLabel}>Mobile Number (for SMS Alerts)</Text>
-                  <View style={styles.inputContainer}>
-                    <Feather name="phone" size={18} color="#64748B" style={styles.fieldIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={citizenPhone}
-                      onChangeText={setCitizenPhone}
-                      placeholder="+91 98630 01482"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="phone-pad"
-                    />
+                {authError && (
+                  <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Feather name="alert-circle" size={16} color="#DC2626" />
+                    <Text style={{ color: '#B91C1C', fontSize: 12, fontWeight: '600', flex: 1 }}>{authError}</Text>
                   </View>
-                </View>
+                )}
+
+                {citizenMode === 'login' ? (
+                  <>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>Email or Mobile Number</Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="mail" size={18} color="#64748B" style={styles.fieldIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          value={citizenIdentifier}
+                          onChangeText={setCitizenIdentifier}
+                          placeholder="aiban@geosense.in"
+                          placeholderTextColor="#94A3B8"
+                          autoCapitalize="none"
+                          keyboardType="email-address"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>Password</Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="lock" size={18} color="#64748B" style={styles.fieldIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          value={citizenPassword}
+                          onChangeText={setCitizenPassword}
+                          secureTextEntry={!showCitizenPassword}
+                          placeholder="••••••••"
+                          placeholderTextColor="#94A3B8"
+                        />
+                        <TouchableOpacity
+                          onPress={() => setShowCitizenPassword(!showCitizenPassword)}
+                          style={styles.eyeBtn}>
+                          <Feather name={showCitizenPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>Full Name *</Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="user" size={18} color="#64748B" style={styles.fieldIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          value={citizenName}
+                          onChangeText={setCitizenName}
+                          placeholder="e.g. Aiban Khonglah"
+                          placeholderTextColor="#94A3B8"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>Email Address *</Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="mail" size={18} color="#64748B" style={styles.fieldIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          value={citizenEmail}
+                          onChangeText={setCitizenEmail}
+                          placeholder="you@example.com"
+                          placeholderTextColor="#94A3B8"
+                          autoCapitalize="none"
+                          keyboardType="email-address"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>Mobile Number</Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="phone" size={18} color="#64748B" style={styles.fieldIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          value={citizenPhone}
+                          onChangeText={setCitizenPhone}
+                          placeholder="+91 98630 01482"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>Password * (min 6 chars)</Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="lock" size={18} color="#64748B" style={styles.fieldIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          value={citizenPassword}
+                          onChangeText={setCitizenPassword}
+                          secureTextEntry={!showCitizenPassword}
+                          placeholder="Create password"
+                          placeholderTextColor="#94A3B8"
+                        />
+                        <TouchableOpacity
+                          onPress={() => setShowCitizenPassword(!showCitizenPassword)}
+                          style={styles.eyeBtn}>
+                          <Feather name={showCitizenPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                )}
 
                 {/* Primary Citizen Login Button */}
                 <TouchableOpacity
-                  style={styles.citizenPrimaryBtn}
+                  style={[styles.citizenPrimaryBtn, isSubmitting && { opacity: 0.7 }]}
                   onPress={handleCitizenSubmit}
+                  disabled={isSubmitting}
                   activeOpacity={0.85}>
-                  <Text style={styles.citizenPrimaryBtnText}>Enter Citizen Dashboard</Text>
-                  <Feather name="arrow-right" size={19} color="#FFFFFF" />
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Text style={styles.citizenPrimaryBtnText}>
+                        {citizenMode === 'login' ? 'Sign In to Citizen Portal' : 'Create Account & Continue'}
+                      </Text>
+                      <Feather name="arrow-right" size={19} color="#FFFFFF" />
+                    </>
+                  )}
                 </TouchableOpacity>
 
                 {/* Quick Feature Chips */}
@@ -358,14 +517,28 @@ export function LoginPortalScreen() {
                   </View>
                 </View>
 
+                {authError && portalTab === 'officer' && (
+                  <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Feather name="alert-circle" size={16} color="#DC2626" />
+                    <Text style={{ color: '#B91C1C', fontSize: 12, fontWeight: '600', flex: 1 }}>{authError}</Text>
+                  </View>
+                )}
+
                 {/* Primary Officer Login Button */}
                 <TouchableOpacity
-                  style={styles.officerPrimaryBtn}
+                  style={[styles.officerPrimaryBtn, isSubmitting && { opacity: 0.7 }]}
                   onPress={handleOfficerSubmit}
+                  disabled={isSubmitting}
                   activeOpacity={0.85}>
-                  <Feather name="shield" size={18} color="#FFFFFF" />
-                  <Text style={styles.officerPrimaryBtnText}>Secure Login to Ops</Text>
-                  <Feather name="arrow-right" size={19} color="#FFFFFF" />
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <>
+                      <Feather name="shield" size={18} color="#FFFFFF" />
+                      <Text style={styles.officerPrimaryBtnText}>Secure Login to Ops</Text>
+                      <Feather name="arrow-right" size={19} color="#FFFFFF" />
+                    </>
+                  )}
                 </TouchableOpacity>
 
                 {/* Security Note */}

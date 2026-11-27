@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,52 @@ import {
   TouchableOpacity,
   Image,
   TextInput,
-  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
-
-const { width } = Dimensions.get('window');
+import { geoSenseApi } from '@/services/api';
 
 export function LiveRiskMapScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation, setSelectedLocation } = useApp();
   const [activeLayer, setActiveLayer] = useState<'satellite' | 'risk' | 'historical'>('risk');
   const [searchQuery, setSearchQuery] = useState('');
+  const [hotspots, setHotspots] = useState<any[]>([]);
+  const [selectedRisk, setSelectedRisk] = useState<any | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const loadMapData = async () => {
+      try {
+        const [hsRes, riskRes] = await Promise.all([
+          geoSenseApi.getRiskHotspots(20).catch(() => ({ hotspots: [] })),
+          geoSenseApi
+            .getCitizenRisk(selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name)
+            .catch(() => null),
+        ]);
+        if (!active) return;
+        setHotspots(hsRes?.hotspots || []);
+        if (riskRes) setSelectedRisk(riskRes);
+      } catch {
+        // ignore
+      }
+    };
+    loadMapData();
+    return () => {
+      active = false;
+    };
+  }, [selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name, activeLayer]);
+
+  const filteredHotspots = hotspots.filter((h) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      String(h.location_name || '').toLowerCase().includes(q) ||
+      String(h.location_id || '').toLowerCase().includes(q) ||
+      String(h.risk_category || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -114,30 +148,45 @@ export function LiveRiskMapScreen() {
             </View>
           </View>
 
-          {/* Interactive Zone Polygons and Pins Overlay */}
-          {/* Mawmluh Green Zone */}
-          <View style={[styles.polygonZone, styles.mawmluhZone]}>
-            <View style={styles.zoneTag}>
-              <Feather name="shield" size={14} color="#10B981" />
-              <Text style={styles.zoneLabel}>Mawmluh</Text>
-            </View>
-          </View>
-
-          {/* Sohra Orange Zone */}
-          <View style={[styles.polygonZone, styles.sohraZone]}>
-            <Text style={styles.sohraLabel}>SOHRA</Text>
-          </View>
-
-          {/* Mawsmai Yellow Zone */}
-          <View style={[styles.polygonZone, styles.mawsmaiZone]}>
-            <Text style={styles.mawsmaiLabel}>Mawsmai</Text>
-          </View>
-
-          {/* NH-206 Critical Zone */}
-          <View style={[styles.polygonZone, styles.criticalZone]}>
-            <Ionicons name="warning" size={18} color="#EF4444" />
-            <Text style={styles.criticalLabel}>NH-206</Text>
-          </View>
+          {/* Live Database Location Chips */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ position: 'absolute', top: 118, left: 16, right: 70 }}
+            contentContainerStyle={{ gap: 8 }}>
+            {filteredHotspots.map((spot) => {
+              const isSelected = spot.location_name === selectedLocation.name;
+              return (
+                <TouchableOpacity
+                  key={spot.assessment_id || spot.location_id}
+                  onPress={() =>
+                    setSelectedLocation({
+                      name: spot.location_name || spot.location_id,
+                      latitude: Number(spot.latitude),
+                      longitude: Number(spot.longitude),
+                      locationId: spot.location_id,
+                    })
+                  }
+                  style={{
+                    backgroundColor: isSelected ? '#064E3B' : 'rgba(255,255,255,0.95)',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: spot.risk_category === 'CRITICAL' ? '#EF4444' : '#F59E0B',
+                  }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: isSelected ? '#FFFFFF' : '#0F172A',
+                    }}>
+                    {spot.location_name || spot.location_id} ({Math.round(spot.risk_score)}%)
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           {/* User Location Radar Pulse Pin */}
           <View style={styles.userLocationPulseContainer}>
@@ -189,23 +238,34 @@ export function LiveRiskMapScreen() {
           <View style={styles.bottomSheet}>
             <View style={styles.sheetTopRow}>
               <View>
-                <Text style={styles.sheetLocationTitle}>Cherrapunji</Text>
-                <Text style={styles.sheetLocationSub}>Meghalaya · Current location</Text>
+                <Text style={styles.sheetLocationTitle}>{selectedLocation.name}</Text>
+                <Text style={styles.sheetLocationSub}>
+                  {selectedLocation.latitude.toFixed(4)}° N, {selectedLocation.longitude.toFixed(4)}° E
+                </Text>
               </View>
               <View style={styles.highPill}>
                 <View style={styles.highDot} />
-                <Text style={styles.highPillText}>HIGH</Text>
+                <Text style={styles.highPillText}>{selectedRisk?.risk_category || 'LOADING'}</Text>
               </View>
             </View>
 
             <View style={styles.sheetStatsRow}>
-              <Text style={styles.sheetRiskNum}>87%</Text>
+              <Text style={styles.sheetRiskNum}>
+                {selectedRisk?.risk_score !== undefined && selectedRisk?.risk_score !== null
+                  ? `${Math.round(selectedRisk.risk_score)}%`
+                  : '--'}
+              </Text>
               <View style={styles.sheetStatsDetails}>
                 <View style={styles.increasingRow}>
-                  <Feather name="trending-up" size={14} color="#EF4444" />
-                  <Text style={styles.increasingText}>Increasing</Text>
+                  <Feather name="activity" size={14} color="#EF4444" />
+                  <Text style={styles.increasingText}>{activeLayer.toUpperCase()} LAYER</Text>
                 </View>
-                <Text style={styles.rainfallText}>Rainfall 112 mm / 24h</Text>
+                <Text style={styles.rainfallText}>
+                  Rainfall{' '}
+                  {selectedRisk?.recent_rainfall_24h_mm !== undefined && selectedRisk?.recent_rainfall_24h_mm !== null
+                    ? `${Number(selectedRisk.recent_rainfall_24h_mm).toFixed(1)} mm / 24h`
+                    : '--'}
+                </Text>
               </View>
               <Feather name="cloud-rain" size={28} color="#64748B" />
             </View>
@@ -218,7 +278,9 @@ export function LiveRiskMapScreen() {
               <Feather name="arrow-right" size={18} color="#FFFFFF" />
             </TouchableOpacity>
 
-            <Text style={styles.mapDisclaimer}>Demo data · Not a live safety advisory</Text>
+            <Text style={styles.mapDisclaimer}>
+              {selectedRisk?.disclaimer || 'Live GeoSense GIS & Risk Data'}
+            </Text>
           </View>
       </View>
     </SafeAreaView>

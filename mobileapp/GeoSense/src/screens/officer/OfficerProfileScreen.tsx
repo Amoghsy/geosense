@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,47 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function OfficerProfileScreen() {
-  const { logoutOfficer, navigate, officerId } = useApp();
+  const { logoutOfficer, navigate, officerId, currentUser } = useApp();
   const [criticalAlertsEnabled, setCriticalAlertsEnabled] = useState(true);
+  const [inspections, setInspections] = useState<any[]>([]);
+  const [verifiedCount, setVerifiedCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      if (!geoSenseApi.getToken()) return;
+      try {
+        const [inspRes, incRes] = await Promise.all([
+          geoSenseApi.getInspections().catch(() => ({ inspections: [] })),
+          geoSenseApi.getOfficerIncidents('VERIFIED').catch(() => ({ incidents: [] })),
+        ]);
+        if (!active) return;
+        setInspections(inspRes?.inspections || []);
+        setVerifiedCount(incRes?.incidents?.length || 0);
+      } catch {
+        // ignore
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const fullName = currentUser?.full_name || 'Field Officer';
+  const initials = fullName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('') || 'FO';
+  const district = currentUser?.assigned_district || 'East Khasi Hills';
+  const stateName = currentUser?.assigned_state || 'Meghalaya';
+  const completedMissions = inspections.filter((i) => i.status === 'COMPLETED').length;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -37,12 +73,14 @@ export function OfficerProfileScreen() {
         <View style={styles.officerCard}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>RK</Text>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
 
             <View style={styles.nameCol}>
-              <Text style={styles.officerName}>Riban Khongwir</Text>
-              <Text style={styles.officerRole}>Field Officer · {officerId || 'FO-1027'}</Text>
+              <Text style={styles.officerName}>{fullName}</Text>
+              <Text style={styles.officerRole}>
+                {currentUser?.role || 'FIELD_OFFICER'} · {officerId}
+              </Text>
               <View style={styles.onDutyPill}>
                 <View style={styles.onDutyDot} />
                 <Text style={styles.onDutyText}>On Duty</Text>
@@ -56,8 +94,8 @@ export function OfficerProfileScreen() {
             <View style={styles.districtLeft}>
               <Ionicons name="location-outline" size={18} color="#00875A" />
               <View>
-                <Text style={styles.districtLabel}>ASSIGNED DISTRICT</Text>
-                <Text style={styles.districtValue}>East Khasi Hills, Meghalaya</Text>
+                <Text style={styles.districtLabel}>ASSIGNED JURISDICTION</Text>
+                <Text style={styles.districtValue}>{district}, {stateName}</Text>
               </View>
             </View>
             <Ionicons name="checkmark-circle" size={20} color="#00875A" />
@@ -67,53 +105,58 @@ export function OfficerProfileScreen() {
         {/* 3 Metrics Cards */}
         <View style={styles.metricsRow}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricBigNum}>48</Text>
+            <Text style={styles.metricBigNum}>{completedMissions}</Text>
             <Text style={styles.metricLabel}>Missions done</Text>
           </View>
 
           <View style={styles.metricCard}>
-            <Text style={styles.metricBigNum}>126</Text>
+            <Text style={styles.metricBigNum}>{inspections.length}</Text>
             <Text style={styles.metricLabel}>Reports filed</Text>
           </View>
 
           <View style={styles.metricCard}>
-            <Text style={styles.metricBigNum}>18</Text>
-            <Text style={styles.metricLabel}>Verified alerts</Text>
+            <Text style={styles.metricBigNum}>{verifiedCount}</Text>
+            <Text style={styles.metricLabel}>Verified inc.</Text>
           </View>
         </View>
 
         {/* Mission History Section */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Mission history</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigate('officer-mission')}>
             <Text style={styles.viewAllText}>View all</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.historyCard}>
-          <TouchableOpacity style={styles.historyItem} activeOpacity={0.7}>
-            <View style={styles.checkIconBox}>
-              <Feather name="check" size={16} color="#00875A" />
-            </View>
-            <View style={styles.historyInfo}>
-              <Text style={styles.historyTitle}>Nongriat trail · Z3</Text>
-              <Text style={styles.historySub}>Risk assessment • 16 Jun</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <View style={styles.historyDivider} />
-
-          <TouchableOpacity style={styles.historyItem} activeOpacity={0.7}>
-            <View style={styles.checkIconBox}>
-              <Feather name="check" size={16} color="#00875A" />
-            </View>
-            <View style={styles.historyInfo}>
-              <Text style={styles.historyTitle}>Mawkdok slope · S4</Text>
-              <Text style={styles.historySub}>Site inspection • 15 Jun</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          {inspections.length === 0 ? (
+            <Text style={{ padding: 16, color: '#64748B', fontSize: 13 }}>
+              No field inspections recorded yet.
+            </Text>
+          ) : (
+            inspections.slice(0, 3).map((insp, idx) => (
+              <React.Fragment key={insp.inspection_id}>
+                {idx > 0 && <View style={styles.historyDivider} />}
+                <TouchableOpacity
+                  style={styles.historyItem}
+                  onPress={() => navigate('officer-mission')}
+                  activeOpacity={0.7}>
+                  <View style={styles.checkIconBox}>
+                    <Feather name="check" size={16} color="#00875A" />
+                  </View>
+                  <View style={styles.historyInfo}>
+                    <Text style={styles.historyTitle}>
+                      {insp.location_name || insp.location_id}
+                    </Text>
+                    <Text style={styles.historySub}>
+                      {insp.status} • {formatRelativeTime(insp.created_at)}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              </React.Fragment>
+            ))
+          )}
         </View>
 
         {/* Settings Group */}

@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,21 +9,36 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
 
 export function OfficerIncidentVerificationScreen() {
-  const { verificationReports, verifyReport, rejectReport } = useApp();
+  const { verificationReports, refreshOfficerIncidents, verifyReport, rejectReport } = useApp();
+  const [loading, setLoading] = useState(true);
 
-  const handleVerify = (id: string) => {
-    verifyReport(id);
-    Alert.alert('Report Verified', 'This report has been verified and added to the live district alerts.');
+  useEffect(() => {
+    refreshOfficerIncidents()
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleVerify = async (id: string) => {
+    try {
+      await verifyReport(id);
+      Alert.alert('Report Verified', 'This report has been verified in the backend database.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to verify incident.');
+    }
   };
 
-  const handleReject = (id: string) => {
-    rejectReport(id);
-    Alert.alert('Report Rejected', 'Citizen submission marked as unverified.');
+  const handleReject = async (id: string) => {
+    try {
+      await rejectReport(id);
+      Alert.alert('Report Rejected', 'Incident marked as rejected in the database.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to reject incident.');
+    }
   };
 
   const pendingCount = verificationReports.filter((r) => r.status === 'pending').length;
@@ -59,55 +74,62 @@ export function OfficerIncidentVerificationScreen() {
           </View>
         </View>
 
-        {/* Report Card 1 */}
-        {verificationReports.length > 0 && (
-          <View style={styles.reportCard}>
-            <View style={styles.imageBox}>
-              <Image
-                source={require('@/assets/images/design/rockfall_incident.jpg')}
-                style={styles.reportPhoto}
-                resizeMode="cover"
-              />
-              <View style={styles.severityTag}>
-                <Ionicons name="warning-outline" size={12} color="#DC2626" />
-                <Text style={styles.severityTagText}>High severity</Text>
+        {/* Live Reports List */}
+        {loading && (
+          <Text style={{ textAlign: 'center', color: '#64748B', paddingVertical: 20 }}>
+            Loading jurisdiction incidents...
+          </Text>
+        )}
+        {!loading && verificationReports.length === 0 && (
+          <Text style={{ textAlign: 'center', color: '#64748B', paddingVertical: 20 }}>
+            No incident reports found in your jurisdiction.
+          </Text>
+        )}
+        {verificationReports.map((report, index) => (
+          <View key={report.id} style={styles.reportCard}>
+            {index === 0 && (
+              <View style={styles.imageBox}>
+                <Image
+                  source={require('@/assets/images/design/rockfall_incident.jpg')}
+                  style={styles.reportPhoto}
+                  resizeMode="cover"
+                />
+                <View style={styles.severityTag}>
+                  <Ionicons name="warning-outline" size={12} color="#DC2626" />
+                  <Text style={styles.severityTagText}>{report.severity} severity</Text>
+                </View>
               </View>
-              <View style={styles.photosCountBadge}>
-                <Feather name="image" size={12} color="#FFFFFF" />
-                <Text style={styles.photosCountText}>3 photos</Text>
-              </View>
-            </View>
+            )}
 
             <View style={styles.reportContent}>
               <View style={styles.idTimeRow}>
-                <Text style={styles.reportId}>{verificationReports[0].id}</Text>
-                <Text style={styles.reportTime}>{verificationReports[0].timeAgo}</Text>
+                <Text style={styles.reportId}>{report.id}</Text>
+                <Text style={styles.reportTime}>{report.timeAgo}</Text>
               </View>
 
-              <Text style={styles.reportTitle}>{verificationReports[0].title}</Text>
+              <Text style={styles.reportTitle}>{report.title}</Text>
 
               <View style={styles.reportLocationRow}>
                 <Feather name="map-pin" size={14} color="#64748B" />
                 <Text style={styles.reportLocationText}>
-                  {verificationReports[0].location} • {verificationReports[0].distance}
+                  {report.location} ({report.latitude.toFixed(3)}, {report.longitude.toFixed(3)})
                 </Text>
               </View>
 
               <View style={styles.quoteBox}>
-                <Text style={styles.quoteText}>{verificationReports[0].quote}</Text>
+                <Text style={styles.quoteText}>{report.quote}</Text>
               </View>
 
               <View style={styles.submitterRow}>
                 <Feather name="user" size={14} color="#64748B" />
-                <Text style={styles.submitterText}>{verificationReports[0].submitter}</Text>
+                <Text style={styles.submitterText}>{report.submitter}</Text>
               </View>
 
-              {/* Action Buttons: Reject and Verify */}
-              {verificationReports[0].status === 'pending' ? (
+              {report.status === 'pending' ? (
                 <View style={styles.cardActionsRow}>
                   <TouchableOpacity
                     style={styles.rejectBtn}
-                    onPress={() => handleReject(verificationReports[0].id)}
+                    onPress={() => handleReject(report.id)}
                     activeOpacity={0.75}>
                     <Feather name="x" size={18} color="#EF4444" />
                     <Text style={styles.rejectBtnText}>Reject</Text>
@@ -115,7 +137,7 @@ export function OfficerIncidentVerificationScreen() {
 
                   <TouchableOpacity
                     style={styles.verifyBtn}
-                    onPress={() => handleVerify(verificationReports[0].id)}
+                    onPress={() => handleVerify(report.id)}
                     activeOpacity={0.85}>
                     <Feather name="check" size={18} color="#FFFFFF" />
                     <Text style={styles.verifyBtnText}>Verify</Text>
@@ -125,72 +147,25 @@ export function OfficerIncidentVerificationScreen() {
                 <View
                   style={[
                     styles.statusResultBox,
-                    verificationReports[0].status === 'verified'
-                      ? styles.verifiedResult
-                      : styles.rejectedResult,
+                    report.status === 'verified' ? styles.verifiedResult : styles.rejectedResult,
                   ]}>
                   <Feather
-                    name={
-                      verificationReports[0].status === 'verified'
-                        ? 'check-circle'
-                        : 'x-circle'
-                    }
+                    name={report.status === 'verified' ? 'check-circle' : 'x-circle'}
                     size={16}
-                    color={
-                      verificationReports[0].status === 'verified'
-                        ? '#059669'
-                        : '#DC2626'
-                    }
+                    color={report.status === 'verified' ? '#059669' : '#DC2626'}
                   />
                   <Text
                     style={[
                       styles.statusResultText,
-                      {
-                        color:
-                          verificationReports[0].status === 'verified'
-                            ? '#059669'
-                            : '#DC2626',
-                      },
+                      { color: report.status === 'verified' ? '#059669' : '#DC2626' },
                     ]}>
-                    Report {verificationReports[0].status.toUpperCase()}
+                    Report {report.status.toUpperCase()}
                   </Text>
                 </View>
               )}
             </View>
           </View>
-        )}
-
-        {/* Report Card 2 (Compact / Moderate) */}
-        {verificationReports.length > 1 && (
-          <View style={styles.compactCard}>
-            <Image
-              source={require('@/assets/images/design/field_report_photo.jpg')}
-              style={styles.compactThumb}
-              resizeMode="cover"
-            />
-            <View style={styles.compactInfo}>
-              <View style={styles.compactTopRow}>
-                <Text style={styles.compactId}>{verificationReports[1].id}</Text>
-                <View style={styles.moderatePill}>
-                  <Text style={styles.moderatePillText}>Moderate</Text>
-                </View>
-              </View>
-
-              <Text style={styles.compactTitle}>{verificationReports[1].title}</Text>
-              <Text style={styles.compactSub}>Mawsynram • 28 min ago</Text>
-
-              <View style={styles.compactFooterRow}>
-                <Text style={styles.compactMeta}>2 photos • 6.4 km away</Text>
-                <TouchableOpacity
-                  onPress={() => handleVerify(verificationReports[1].id)}
-                  style={styles.reviewLinkRow}>
-                  <Text style={styles.reviewLinkText}>Review report</Text>
-                  <Feather name="arrow-right" size={14} color="#00875A" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
+        ))}
 
         {/* Verification Note */}
         <View style={styles.verificationNoteBox}>

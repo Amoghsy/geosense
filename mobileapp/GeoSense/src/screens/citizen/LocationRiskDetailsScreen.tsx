@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,39 +9,105 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function LocationRiskDetailsScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation, setLatestAssessmentId } = useApp();
   const [selectedRange, setSelectedRange] = useState('1–6 Hours');
+  const [riskData, setRiskData] = useState<any | null>(null);
+  const [latestRecord, setLatestRecord] = useState<any | null>(null);
+  const [rainfallData, setRainfallData] = useState<any | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const risk = await geoSenseApi.getCitizenRisk(
+          selectedLocation.latitude,
+          selectedLocation.longitude,
+          selectedLocation.name
+        );
+        if (!active) return;
+        setRiskData(risk);
+
+        if (risk?.location_id) {
+          const [latest, rain] = await Promise.all([
+            geoSenseApi.getLatestRisk(risk.location_id).catch(() => null),
+            geoSenseApi
+              .getRainfallIndicators(
+                selectedLocation.latitude,
+                selectedLocation.longitude,
+                risk.location_id
+              )
+              .catch(() => null),
+          ]);
+          if (!active) return;
+          if (latest) {
+            setLatestRecord(latest);
+            if (latest.assessment_id) {
+              setLatestAssessmentId(latest.assessment_id);
+            }
+          }
+          if (rain) setRainfallData(rain);
+        }
+      } catch {
+        // leave null
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name]);
+
+  const rain24h =
+    riskData?.recent_rainfall_24h_mm ??
+    rainfallData?.observed_windows?.['24h']?.rainfall_mm ??
+    latestRecord?.rainfall_24h_mm;
+  const forecast24h =
+    riskData?.forecast_rainfall_24h_mm ??
+    rainfallData?.forecast_windows?.next_24h?.rainfall_mm ??
+    latestRecord?.forecast_24h_mm;
+  const slopeDeg = latestRecord?.slope_deg;
+  const soilMoist = latestRecord?.soil_moisture_m3_m3;
+  const awi = rainfallData?.awi_value;
 
   const factors = [
     {
       icon: <Feather name="cloud-rain" size={20} color="#00875A" />,
-      label: 'Rainfall',
-      value: '112 mm / 24 hours',
+      label: 'Observed Rainfall (24h)',
+      value: rain24h !== null && rain24h !== undefined ? `${Number(rain24h).toFixed(1)} mm` : 'N/A',
+    },
+    {
+      icon: <Feather name="cloud-lightning" size={20} color="#00875A" />,
+      label: 'Forecast Rainfall (24h)',
+      value: forecast24h !== null && forecast24h !== undefined ? `${Number(forecast24h).toFixed(1)} mm` : 'N/A',
     },
     {
       icon: <MaterialCommunityIcons name="triangle-outline" size={20} color="#00875A" />,
       label: 'Slope Angle',
-      value: '32°',
+      value: slopeDeg !== null && slopeDeg !== undefined ? `${slopeDeg}°` : 'Terrain DEM',
     },
     {
       icon: <Feather name="droplet" size={20} color="#00875A" />,
-      label: 'Soil Saturation',
-      value: 'High',
-    },
-    {
-      icon: <MaterialCommunityIcons name="tree-outline" size={20} color="#00875A" />,
-      label: 'Land Cover Change',
-      value: '−18%',
+      label: 'Soil Moisture',
+      value: soilMoist !== null && soilMoist !== undefined ? `${Number(soilMoist).toFixed(2)} m³/m³` : 'Monitored',
     },
     {
       icon: <Feather name="clock" size={20} color="#00875A" />,
-      label: 'Historical Landslide Activity',
-      value: 'Elevated',
+      label: 'Antecedent Wetness (AWI)',
+      value: awi !== null && awi !== undefined ? `${Number(awi).toFixed(1)} mm` : 'Computed',
     },
   ];
+
+  const latStr = `${Math.abs(selectedLocation.latitude).toFixed(4)}° ${selectedLocation.latitude >= 0 ? 'N' : 'S'}`;
+  const lonStr = `${Math.abs(selectedLocation.longitude).toFixed(4)}° ${selectedLocation.longitude >= 0 ? 'E' : 'W'}`;
+  const scoreDisplay =
+    riskData?.risk_score !== null && riskData?.risk_score !== undefined
+      ? `${Math.round(riskData.risk_score)}%`
+      : '--';
+  const catDisplay = riskData?.risk_category || 'LOADING';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -54,10 +120,12 @@ export function LocationRiskDetailsScreen() {
         
         {/* Location Title & Subtitle */}
         <View style={styles.locationHeader}>
-          <Text style={styles.locationName}>Cherrapunji, Meghalaya</Text>
+          <Text style={styles.locationName}>{selectedLocation.name}</Text>
           <View style={styles.coordsRow}>
-            <Text style={styles.coordsText}>25.2702° N, 91.7323° E</Text>
-            <Text style={styles.updatedText}>Updated 5 min ago</Text>
+            <Text style={styles.coordsText}>{latStr}, {lonStr}</Text>
+            <Text style={styles.updatedText}>
+              {riskData?.assessment_time ? `Updated ${formatRelativeTime(riskData.assessment_time)}` : 'Syncing...'}
+            </Text>
           </View>
         </View>
 
@@ -66,19 +134,19 @@ export function LocationRiskDetailsScreen() {
           <View style={styles.riskCardHeader}>
             <View style={styles.highRiskPill}>
               <View style={styles.redDot} />
-              <Text style={styles.highRiskText}>HIGH RISK</Text>
+              <Text style={styles.highRiskText}>{catDisplay} RISK</Text>
             </View>
             <View style={styles.trendRow}>
-              <Feather name="trending-up" size={14} color="#EF4444" />
-              <Text style={styles.trendText}>Increasing</Text>
+              <Feather name="activity" size={14} color="#EF4444" />
+              <Text style={styles.trendText}>Live Model</Text>
             </View>
           </View>
 
           <View style={styles.riskValuesRow}>
-            <Text style={styles.percentageText}>87%</Text>
+            <Text style={styles.percentageText}>{scoreDisplay}</Text>
             <View style={styles.labelsCol}>
-              <Text style={styles.probabilityLabel}>Landslide probability</Text>
-              <Text style={styles.windowLabel}>Next 6 Hours</Text>
+              <Text style={styles.probabilityLabel}>Dynamic risk index</Text>
+              <Text style={styles.windowLabel}>{selectedRange}</Text>
             </View>
           </View>
         </View>

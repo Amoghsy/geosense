@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,20 +7,67 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function SafetyOutlookScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation } = useApp();
   const [selectedHorizon, setSelectedHorizon] = useState('Next 6 Hours');
+  const [weather, setWeather] = useState<any | null>(null);
+  const [rainfall, setRainfall] = useState<any | null>(null);
+  const [trendPoints, setTrendPoints] = useState<{ label: string; score: number }[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [curW, rain, risk] = await Promise.all([
+          geoSenseApi.getCurrentWeather(selectedLocation.latitude, selectedLocation.longitude).catch(() => null),
+          geoSenseApi.getRainfallIndicators(selectedLocation.latitude, selectedLocation.longitude).catch(() => null),
+          geoSenseApi.getCitizenRisk(selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name).catch(() => null),
+        ]);
+        if (!active) return;
+        if (curW) setWeather(curW);
+        if (rain) setRainfall(rain);
+
+        const locId = risk?.location_id || curW?.location_id;
+        if (locId) {
+          const trends = await geoSenseApi.getLocationTrends(locId).catch(() => null);
+          if (active && trends?.trend_points?.length) {
+            const pts = trends.trend_points.slice(-4).map((p: any, idx: number, arr: any[]) => ({
+              label: idx === arr.length - 1 ? 'Now' : `T-${arr.length - 1 - idx}`,
+              score: Math.round(Number(p.risk_score ?? 0)),
+            }));
+            setTrendPoints(pts);
+          } else if (active && risk?.risk_score !== undefined) {
+            setTrendPoints([{ label: 'Now', score: Math.round(Number(risk.risk_score)) }]);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name]);
 
   const recommendations = [
-    'Avoid steep slopes',
-    'Stay away from unstable roads',
-    'Keep emergency essentials ready',
-    'Follow official evacuation instructions',
+    'Avoid steep slopes during intense rainfall',
+    'Stay away from unstable mountain roads',
+    'Keep emergency essentials and power bank ready',
+    'Follow official SDMA evacuation instructions',
   ];
+
+  const rain24h = rainfall?.observed_windows?.['24h']?.rainfall_mm;
+  const rain1h = rainfall?.observed_windows?.['1h']?.rainfall_mm ?? weather?.precipitation_mm;
+  const humidity = weather?.relative_humidity_pct;
+  const temp = weather?.temperature_c;
+  const condition = weather?.weather_condition || 'Live Weather';
+  const updatedStr = weather?.observation_time ? `Updated ${formatRelativeTime(weather.observation_time)}` : 'Live';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -71,33 +118,27 @@ export function SafetyOutlookScreen() {
           })}
         </ScrollView>
 
-        {/* 4 Forecast Cards */}
+        {/* Forecast / Trend Cards */}
         <View style={styles.timelineRow}>
-          <View style={styles.timelineCard}>
-            <Text style={styles.timelineTime}>Now</Text>
-            <Text style={[styles.timelineVal, { color: '#EF4444' }]}>82%</Text>
-          </View>
-          <View style={[styles.timelineCard, styles.timelineCardHighlight]}>
-            <Text style={styles.timelineTime}>6h</Text>
-            <Text style={[styles.timelineVal, { color: '#EF4444' }]}>87%</Text>
-          </View>
-          <View style={styles.timelineCard}>
-            <Text style={styles.timelineTime}>24h</Text>
-            <Text style={[styles.timelineVal, { color: '#EF4444' }]}>74%</Text>
-          </View>
-          <View style={styles.timelineCard}>
-            <Text style={styles.timelineTime}>7d</Text>
-            <Text style={[styles.timelineVal, { color: '#F59E0B' }]}>58%</Text>
-          </View>
+          {(trendPoints.length > 0 ? trendPoints : [{ label: 'Now', score: 0 }]).map((pt, idx, arr) => {
+            const color = pt.score >= 70 ? '#EF4444' : pt.score >= 45 ? '#F59E0B' : '#00875A';
+            const isLatest = idx === arr.length - 1;
+            return (
+              <View key={idx} style={[styles.timelineCard, isLatest && styles.timelineCardHighlight]}>
+                <Text style={styles.timelineTime}>{pt.label}</Text>
+                <Text style={[styles.timelineVal, { color }]}>{pt.score}%</Text>
+              </View>
+            );
+          })}
         </View>
         <Text style={styles.captionText}>
-          Illustrative model outlook · Risk may change rapidly.
+          Live risk trend from GeoSense backend · Risk may change rapidly.
         </Text>
 
         {/* Weather overview */}
         <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
           <Text style={styles.sectionTitle}>Weather overview</Text>
-          <Text style={styles.updatedText}>Updated 5m ago</Text>
+          <Text style={styles.updatedText}>{updatedStr}</Text>
         </View>
 
         <View style={styles.weatherCard}>
@@ -107,28 +148,36 @@ export function SafetyOutlookScreen() {
                 <Feather name="cloud-rain" size={26} color="#00875A" />
               </View>
               <View>
-                <Text style={styles.weatherCondition}>Heavy rainfall</Text>
-                <Text style={styles.weatherLocation}>Cherrapunji · Monsoon conditions</Text>
+                <Text style={styles.weatherCondition}>{condition}</Text>
+                <Text style={styles.weatherLocation}>{selectedLocation.name}</Text>
               </View>
             </View>
-            <Text style={styles.weatherTemp}>19°</Text>
+            <Text style={styles.weatherTemp}>
+              {temp !== null && temp !== undefined ? `${Math.round(temp)}°` : '--°'}
+            </Text>
           </View>
 
           <View style={styles.weatherDivider} />
 
           <View style={styles.weatherStatsRow}>
             <View style={styles.weatherStatCol}>
-              <Text style={styles.statValue}>112 mm</Text>
+              <Text style={styles.statValue}>
+                {rain24h !== null && rain24h !== undefined ? `${Number(rain24h).toFixed(1)} mm` : '--'}
+              </Text>
               <Text style={styles.statLabel}>Rain / 24h</Text>
             </View>
             <View style={styles.statBorderDivider} />
             <View style={styles.weatherStatCol}>
-              <Text style={styles.statValue}>96%</Text>
+              <Text style={styles.statValue}>
+                {humidity !== null && humidity !== undefined ? `${Math.round(humidity)}%` : '--'}
+              </Text>
               <Text style={styles.statLabel}>Humidity</Text>
             </View>
             <View style={styles.statBorderDivider} />
             <View style={styles.weatherStatCol}>
-              <Text style={styles.statValue}>12 mm/h</Text>
+              <Text style={styles.statValue}>
+                {rain1h !== null && rain1h !== undefined ? `${Number(rain1h).toFixed(1)} mm/h` : '--'}
+              </Text>
               <Text style={styles.statLabel}>Intensity</Text>
             </View>
           </View>

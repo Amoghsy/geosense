@@ -1,26 +1,72 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  Alert,
 } from 'react-native';
-import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function OfficerMissionScreen() {
-  const { navigate } = useApp();
+  const { navigate, setSelectedLocation } = useApp();
   const [navigating, setNavigating] = useState(false);
+  const [mission, setMission] = useState<any | null>(null);
+  const [hotspot, setHotspot] = useState<any | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      if (!geoSenseApi.getToken()) return;
+      try {
+        const [assignRes, inspRes] = await Promise.all([
+          geoSenseApi.getOfficerAssignments().catch(() => null),
+          geoSenseApi.getInspections().catch(() => null),
+        ]);
+        if (!active) return;
+        const firstInsp = inspRes?.inspections?.[0] || null;
+        const firstInc = assignRes?.assigned_incidents?.[0] || null;
+        const firstHotspot = assignRes?.priority_hotspots?.[0] || null;
+        setMission(firstInsp || firstInc);
+        setHotspot(firstHotspot);
+
+        const target = firstInsp || firstInc || firstHotspot;
+        if (target?.latitude && target?.longitude) {
+          setSelectedLocation({
+            name: target.location_name || 'Assigned Site',
+            latitude: Number(target.latitude),
+            longitude: Number(target.longitude),
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const missionTitle =
+    mission?.location_name || hotspot?.location_name || 'Loading assigned mission...';
+  const missionId = mission?.inspection_id || mission?.id || 'ASSIGNED';
+  const missionDesc =
+    mission?.observations || mission?.description || 'On-site inspection & risk assessment';
+  const missionStatus = mission?.risk_category_snapshot || mission?.status || 'ACTIVE';
+  const assignedTime = mission?.created_at
+    ? `Assigned ${formatRelativeTime(mission.created_at)}`
+    : 'Synced from backend';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Assigned Mission"
-        subtitle="MISSION GS-2048"
+        subtitle={String(missionId).toUpperCase()}
         variant="officer-dark"
       />
 
@@ -73,12 +119,12 @@ export function OfficerMissionScreen() {
         {/* Bottom Mission Card */}
         <View style={styles.missionCard}>
           <View style={styles.missionCardHeader}>
-            <View>
-              <Text style={styles.missionName}>Sohra slope · S1</Text>
-              <Text style={styles.missionType}>On-site inspection & risk assessment</Text>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.missionName}>{missionTitle}</Text>
+              <Text style={styles.missionType}>{missionDesc}</Text>
             </View>
             <View style={styles.priorityBadge}>
-              <Text style={styles.priorityBadgeText}>High priority</Text>
+              <Text style={styles.priorityBadgeText}>{missionStatus}</Text>
             </View>
           </View>
 
@@ -87,24 +133,30 @@ export function OfficerMissionScreen() {
             <View style={styles.metricCard}>
               <Feather name="navigation" size={18} color="#00875A" />
               <View>
-                <Text style={styles.metricVal}>2.8 km</Text>
-                <Text style={styles.metricLabel}>Distance</Text>
+                <Text style={styles.metricVal}>
+                  {mission?.latitude ? Number(mission.latitude).toFixed(3) : '--'}
+                </Text>
+                <Text style={styles.metricLabel}>Lat</Text>
               </View>
             </View>
 
             <View style={styles.metricCard}>
-              <Feather name="clock" size={18} color="#00875A" />
+              <Feather name="map-pin" size={18} color="#00875A" />
               <View>
-                <Text style={styles.metricVal}>8 min</Text>
-                <Text style={styles.metricLabel}>ETA</Text>
+                <Text style={styles.metricVal}>
+                  {mission?.longitude ? Number(mission.longitude).toFixed(3) : '--'}
+                </Text>
+                <Text style={styles.metricLabel}>Lon</Text>
               </View>
             </View>
 
             <View style={styles.metricCard}>
-              <MaterialCommunityIcons name="routes" size={18} color="#00875A" />
+              <MaterialCommunityIcons name="shield-alert" size={18} color="#00875A" />
               <View>
-                <Text style={styles.metricVal}>Via SH-5</Text>
-                <Text style={styles.metricLabel}>Route</Text>
+                <Text style={styles.metricVal}>
+                  {mission?.risk_score_snapshot ? `${Math.round(mission.risk_score_snapshot)}%` : '--'}
+                </Text>
+                <Text style={styles.metricLabel}>Risk</Text>
               </View>
             </View>
           </View>
@@ -112,7 +164,7 @@ export function OfficerMissionScreen() {
           {/* Assigned Time */}
           <View style={styles.assignedTimeRow}>
             <Feather name="calendar" size={16} color="#64748B" />
-            <Text style={styles.assignedTimeText}>Assigned today at 09:00 AM</Text>
+            <Text style={styles.assignedTimeText}>{assignedTime}</Text>
           </View>
 
           {/* Instructions Box */}

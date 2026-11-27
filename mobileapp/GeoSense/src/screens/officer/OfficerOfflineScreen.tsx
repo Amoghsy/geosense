@@ -10,18 +10,26 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
+import { geoSenseApi } from '@/services/api';
 
 export function OfficerOfflineScreen() {
-  const [lastSync, setLastSync] = useState('Today, 09:32 AM');
+  const [lastSync, setLastSync] = useState('Not synced yet');
   const [syncing, setSyncing] = useState(false);
 
-  const handleSyncNow = () => {
+  const handleSyncNow = async () => {
     setSyncing(true);
-    setTimeout(() => {
+    try {
+      const dash = await geoSenseApi.getOfficerDashboard();
+      setLastSync(`Synced · ${new Date().toLocaleTimeString()}`);
+      Alert.alert(
+        'Synchronized',
+        `Synced ${dash?.incidents?.length ?? 0} incidents and ${dash?.inspections?.length ?? 0} inspections with backend.`
+      );
+    } catch {
+      Alert.alert('Sync Failed', 'Unable to reach GeoSense backend server.');
+    } finally {
       setSyncing(false);
-      setLastSync('Today, Just now');
-      Alert.alert('Synchronized', 'All pending reports uploaded and maps synchronized.');
-    }, 1200);
+    }
   };
 
   return (

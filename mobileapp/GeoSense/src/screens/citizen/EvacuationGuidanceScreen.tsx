@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,44 @@ import {
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function EvacuationGuidanceScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation } = useApp();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [nearestShelter, setNearestShelter] = useState<any | null>(null);
+  const [alternateShelter, setAlternateShelter] = useState<any | null>(null);
+
+  const loadNearestShelters = async () => {
+    try {
+      const res = await geoSenseApi.getNearbyVerifiedResources(
+        selectedLocation.latitude,
+        selectedLocation.longitude,
+        50,
+        'SHELTER'
+      );
+      const list = res?.resources || [];
+      setNearestShelter(list[0] || null);
+      setAlternateShelter(list[1] || null);
+    } catch {
+      // keep null
+    }
+  };
+
+  useEffect(() => {
+    loadNearestShelters();
+  }, [selectedLocation.latitude, selectedLocation.longitude]);
+
+  const shelterName = nearestShelter?.resource_name || nearestShelter?.name || 'Loading nearest shelter...';
+  const distKm = nearestShelter?.distance_km !== undefined ? Number(nearestShelter.distance_km).toFixed(1) : '--';
+  const etaMin = nearestShelter?.distance_km !== undefined ? Math.max(3, Math.round(Number(nearestShelter.distance_km) * 3)) : '--';
+  const altName = alternateShelter?.resource_name || alternateShelter?.name || 'Alternate shelter via Mawmluh';
+  const altDist = alternateShelter?.distance_km !== undefined ? `${Number(alternateShelter.distance_km).toFixed(1)} km` : '';
 
   const handleCallEmergency = () => {
     Alert.alert(
       'Emergency Call (112)',
-      'Calling emergency services at 112 for immediate dispatch and rescue support.',
+      'Calling emergency services at 112 (or State Disaster Helpline 1070) for immediate dispatch.',
       [{ text: 'OK' }]
     );
   };
@@ -108,25 +137,27 @@ export function EvacuationGuidanceScreen() {
             </View>
             <View style={styles.shelterInfoCol}>
               <Text style={styles.nearestLabel}>Nearest Safe Shelter</Text>
-              <Text style={styles.shelterTitle}>Community Shelter A</Text>
+              <Text style={styles.shelterTitle}>{shelterName}</Text>
               <View style={styles.distanceTagRow}>
-                <Text style={styles.distanceText}>2.8 km · 8 minutes</Text>
+                <Text style={styles.distanceText}>{distKm} km · {etaMin} minutes</Text>
                 <View style={styles.safeStatusPill}>
                   <View style={styles.safeDot} />
-                  <Text style={styles.safeStatusText}>SAFE ROUTE</Text>
+                  <Text style={styles.safeStatusText}>VERIFIED SHELTER</Text>
                 </View>
               </View>
             </View>
           </View>
 
           <View style={styles.roadConditionRow}>
-            <Text style={styles.roadCondLabel}>Road condition: Passable</Text>
+            <Text style={styles.roadCondLabel}>
+              {nearestShelter?.address || 'Verified operational shelter'}
+            </Text>
           </View>
 
           {/* Alternate Route Row */}
           <View style={styles.alternateRow}>
-            <Text style={styles.altText}>Alternate route via Mawmluh</Text>
-            <Text style={styles.altStats}>4.2 km · 13 min</Text>
+            <Text style={styles.altText}>{altName}</Text>
+            <Text style={styles.altStats}>{altDist}</Text>
           </View>
 
           {/* Start Navigation Button */}
@@ -143,7 +174,7 @@ export function EvacuationGuidanceScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.startNavText}>
-              {isNavigating ? 'Navigating to Shelter A...' : 'Start Navigation'}
+              {isNavigating ? `Navigating to ${shelterName}...` : 'Start Navigation'}
             </Text>
           </TouchableOpacity>
 
@@ -151,10 +182,10 @@ export function EvacuationGuidanceScreen() {
           <View style={styles.secondaryActionsRow}>
             <TouchableOpacity
               style={styles.secActionButton}
-              onPress={() => Alert.alert('Recalculating', 'Finding newest satellite route updates...')}
+              onPress={loadNearestShelters}
               activeOpacity={0.75}>
               <Feather name="rotate-cw" size={16} color="#0F172A" />
-              <Text style={styles.secActionText}>Recalculate Route</Text>
+              <Text style={styles.secActionText}>Refresh Shelters</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

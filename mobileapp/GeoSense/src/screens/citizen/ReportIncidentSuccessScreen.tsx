@@ -50,7 +50,7 @@ export function ReportIncidentSuccessScreen() {
         <View style={styles.receiptCard}>
           <View style={styles.receiptRow}>
             <Text style={styles.receiptLabel}>Reference ID</Text>
-            <Text style={styles.receiptValue}>{incidentDraft.referenceId || 'GS-2026-01482'}</Text>
+            <Text style={styles.receiptValue}>{incidentDraft.referenceId || 'Submitted'}</Text>
           </View>
           <View style={styles.receiptDivider} />
 

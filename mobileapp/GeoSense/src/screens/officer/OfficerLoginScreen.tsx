@@ -11,6 +11,7 @@ import {
   StatusBar as RNStatusBar,
   ScrollView,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -30,6 +31,20 @@ export function OfficerLoginScreen() {
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    setAuthError(null);
+    setIsSubmitting(true);
+    try {
+      await loginOfficer(officerId, password);
+    } catch (err: any) {
+      setAuthError(err?.message || 'Officer authentication failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -147,13 +162,27 @@ export function OfficerLoginScreen() {
                 </TouchableOpacity>
               </View>
 
+              {authError && (
+                <View style={{ backgroundColor: '#FEE2E2', borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="alert-circle" size={16} color="#DC2626" />
+                  <Text style={{ color: '#B91C1C', fontSize: 12, fontWeight: '600', flex: 1 }}>{authError}</Text>
+                </View>
+              )}
+
               {/* Secure Login Button */}
               <TouchableOpacity
-                style={styles.loginBtn}
-                onPress={() => loginOfficer(officerId)}
+                style={[styles.loginBtn, isSubmitting && { opacity: 0.7 }]}
+                onPress={handleLogin}
+                disabled={isSubmitting}
                 activeOpacity={0.85}>
-                <Feather name="arrow-right" size={18} color="#FFFFFF" />
-                <Text style={styles.loginBtnText}>Secure login</Text>
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <>
+                    <Feather name="arrow-right" size={18} color="#FFFFFF" />
+                    <Text style={styles.loginBtnText}>Secure login</Text>
+                  </>
+                )}
               </TouchableOpacity>
 
               {/* Encrypted Access Note */}

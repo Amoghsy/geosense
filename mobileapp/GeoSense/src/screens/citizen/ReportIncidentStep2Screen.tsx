@@ -7,6 +7,8 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
@@ -17,6 +19,7 @@ export function ReportIncidentStep2Screen() {
   const [severity, setSeverity] = useState<'Low' | 'Moderate' | 'High' | 'Critical'>('High');
   const [roadAccessibility, setRoadAccessibility] = useState('Partially blocked');
   const [peopleAffected, setPeopleAffected] = useState('Not known');
+  const [submitting, setSubmitting] = useState(false);
 
   const severities: ('Low' | 'Moderate' | 'High' | 'Critical')[] = [
     'Low',
@@ -26,13 +29,21 @@ export function ReportIncidentStep2Screen() {
   ];
 
   const handleSubmit = async () => {
-    updateIncidentDraft({
-      severity,
-      accessibility: roadAccessibility,
-      peopleAffected,
-    });
-    await submitIncidentToBackend();
-    navigate('report-incident-success');
+    setSubmitting(true);
+    try {
+      updateIncidentDraft({
+        severity,
+        accessibility: roadAccessibility,
+        peopleAffected,
+        time: new Date().toISOString(),
+      });
+      await submitIncidentToBackend();
+      navigate('report-incident-success');
+    } catch (err: any) {
+      Alert.alert('Submission Failed', err?.message || 'Could not submit incident report to server.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -61,7 +72,7 @@ export function ReportIncidentStep2Screen() {
         {/* Incident Time */}
         <Text style={styles.fieldLabel}>Incident time</Text>
         <View style={styles.inputWithIcon}>
-          <Text style={styles.inputValue}>07 Nov 2026 · 09:35 AM</Text>
+          <Text style={styles.inputValue}>{new Date().toLocaleString()}</Text>
           <Feather name="calendar" size={18} color="#64748B" />
         </View>
 

@@ -13,7 +13,7 @@ import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
 
 export function CitizenProfileScreen() {
-  const { navigate, citizenName, citizenPhone, setPortalTab, logoutCitizen } = useApp();
+  const { navigate, citizenName, citizenPhone, currentUser, setPortalTab, logoutCitizen } = useApp();
 
   const menuItems = [
     {
@@ -82,10 +82,10 @@ export function CitizenProfileScreen() {
             style={styles.avatarImage}
           />
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{citizenName || 'Aiban Khonglah'}</Text>
-            <Text style={styles.userPhone}>{citizenPhone || '+91 98630 01482'}</Text>
+            <Text style={styles.userName}>{citizenName || 'Citizen User'}</Text>
+            <Text style={styles.userPhone}>{citizenPhone || currentUser?.email || ''}</Text>
             <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>CITIZEN</Text>
+              <Text style={styles.roleBadgeText}>{currentUser?.role || 'CITIZEN'}</Text>
             </View>
           </View>
           <TouchableOpacity style={styles.editProfileBtn}>

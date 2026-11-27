@@ -12,27 +12,66 @@ import {
   MaterialCommunityIcons,
   Ionicons,
 } from '@expo/vector-icons';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
 import { HeaderBar } from '@/components/HeaderBar';
 import { geoSenseApi } from '@/services/api';
 
 export function CitizenHomeScreen() {
-  const { navigate } = useApp();
+  const { navigate, selectedLocation, citizenName } = useApp();
   const [selectedHorizon, setSelectedHorizon] = useState('Next 6 Hours');
   const [isBannerOpen, setIsBannerOpen] = useState(false);
-  const [liveRiskCategory, setLiveRiskCategory] = useState<string>('HIGH');
-  const [liveRiskScore, setLiveRiskScore] = useState<string>('87');
+  const [liveRiskCategory, setLiveRiskCategory] = useState<string>('LOADING');
+  const [liveRiskScore, setLiveRiskScore] = useState<string>('--');
+  const [updatedLabel, setUpdatedLabel] = useState<string>('Syncing with backend...');
+  const [rainSummary, setRainSummary] = useState<string>('Loading rainfall & forecast...');
+  const [disclaimer, setDisclaimer] = useState<string>('Decision-support indicator from GeoSense backend.');
 
   useEffect(() => {
-    geoSenseApi.getCitizenRisk(25.2702, 91.7323, 'Cherrapunji, Meghalaya')
-      .then((res) => {
-        if (res?.risk_category) setLiveRiskCategory(res.risk_category);
-        if (res?.risk_score !== null && res?.risk_score !== undefined) {
-          setLiveRiskScore(String(Math.round(res.risk_score)));
+    let active = true;
+    const load = async () => {
+      try {
+        const dash = geoSenseApi.getToken()
+          ? await geoSenseApi.getCitizenDashboard(
+              selectedLocation.latitude,
+              selectedLocation.longitude,
+              selectedLocation.name
+            )
+          : {
+              risk: await geoSenseApi.getCitizenRisk(
+                selectedLocation.latitude,
+                selectedLocation.longitude,
+                selectedLocation.name
+              ),
+            };
+        if (!active) return;
+        const r = dash?.risk;
+        if (r?.risk_category) setLiveRiskCategory(r.risk_category);
+        if (r?.risk_score !== null && r?.risk_score !== undefined) {
+          setLiveRiskScore(`${Math.round(r.risk_score)}%`);
         }
-      })
-      .catch(() => {});
-  }, []);
+        if (r?.assessment_time) {
+          setUpdatedLabel(`Updated ${formatRelativeTime(r.assessment_time)}`);
+        }
+        if (r?.recent_rainfall_24h_mm !== undefined || r?.forecast_rainfall_24h_mm !== undefined) {
+          const obs = r.recent_rainfall_24h_mm ?? 0;
+          const fc = r.forecast_rainfall_24h_mm ?? 0;
+          setRainSummary(`24h Rain: ${Number(obs).toFixed(1)} mm · Forecast: ${Number(fc).toFixed(1)} mm`);
+        }
+        if (r?.disclaimer) {
+          setDisclaimer(r.disclaimer);
+        }
+      } catch {
+        if (active) {
+          setLiveRiskCategory('UNAVAILABLE');
+          setUpdatedLabel('Unable to reach server');
+        }
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [selectedLocation.latitude, selectedLocation.longitude, selectedLocation.name]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -45,13 +84,15 @@ export function CitizenHomeScreen() {
         
         {/* Greeting & Location */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>Hello, Welcome Back!</Text>
+          <Text style={styles.greetingTitle}>
+            Hello{citizenName ? `, ${citizenName.split(' ')[0]}` : ''}!
+          </Text>
           <TouchableOpacity
             style={styles.locationSelector}
             onPress={() => navigate('map')}
             activeOpacity={0.7}>
             <Ionicons name="location-outline" size={18} color="#00875A" />
-            <Text style={styles.locationText}>Cherrapunji, Meghalaya</Text>
+            <Text style={styles.locationText}>{selectedLocation.name}</Text>
             <Feather name="chevron-down" size={16} color="#00875A" />
           </TouchableOpacity>
         </View>
@@ -74,17 +115,17 @@ export function CitizenHomeScreen() {
           <View style={styles.riskValueRow}>
             <Text style={styles.riskPercentage}>{liveRiskScore}</Text>
             <View style={styles.riskSubInfo}>
-              <Text style={styles.riskSubtitle}>Heuristic risk index</Text>
-              <Text style={styles.riskWindow}>Next 6 Hours</Text>
+              <Text style={styles.riskSubtitle}>Dynamic risk index</Text>
+              <Text style={styles.riskWindow}>{selectedHorizon}</Text>
             </View>
           </View>
 
           <View style={styles.riskCardFooter}>
             <View style={styles.trendRow}>
-              <Feather name="trending-up" size={16} color="#FFFFFF" />
-              <Text style={styles.trendText}>Increasing</Text>
+              <Feather name="activity" size={16} color="#FFFFFF" />
+              <Text style={styles.trendText}>{liveRiskCategory}</Text>
             </View>
-            <Text style={styles.updatedText}>Last Updated 5 minutes ago</Text>
+            <Text style={styles.updatedText}>{updatedLabel}</Text>
           </View>
         </TouchableOpacity>
 
@@ -210,7 +251,7 @@ export function CitizenHomeScreen() {
           }}
           activeOpacity={0.8}>
           <Text style={styles.bannerText}>
-            6h peak: 87% · Weather & safety below
+            {rainSummary}
           </Text>
           <Feather
             name={isBannerOpen ? 'chevron-up' : 'chevron-down'}
@@ -219,9 +260,9 @@ export function CitizenHomeScreen() {
           />
         </TouchableOpacity>
 
-        {/* Demo Disclaimer */}
+        {/* Disclaimer */}
         <View style={styles.disclaimerBox}>
-          <Text style={styles.disclaimerText}>Demo data · Not a live safety advisory</Text>
+          <Text style={styles.disclaimerText}>{disclaimer}</Text>
         </View>
 
       </ScrollView>

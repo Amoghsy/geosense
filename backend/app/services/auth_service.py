@@ -159,9 +159,18 @@ def register_user(
 
 def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     ensure_phase8_schema()
+    identifier = email.strip().lower()
     conn = get_db_connection()
     try:
-        row = conn.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email.strip().lower(),)).fetchone()
+        row = conn.execute(
+            """
+            SELECT * FROM users
+            WHERE LOWER(email) = ?
+               OR LOWER(COALESCE(officer_code, '')) = ?
+               OR LOWER(REPLACE(COALESCE(phone, ''), ' ', '')) = ?
+            """,
+            (identifier, identifier, identifier.replace(" ", "")),
+        ).fetchone()
         if not row or not row["is_active"]:
             return None
         if not verify_password(password, row["password_hash"]):

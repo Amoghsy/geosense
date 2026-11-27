@@ -9,73 +9,77 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
-import { useApp } from '@/context/AppContext';
+import { useApp, formatRelativeTime } from '@/context/AppContext';
 import { geoSenseApi } from '@/services/api';
 
 export function OfficerAlertsScreen() {
-  const { navigate } = useApp();
+  const { navigate, currentUser } = useApp();
   const [activeFilter, setActiveFilter] = useState('All');
-  const [liveOfficerAlerts, setLiveOfficerAlerts] = useState<any[] | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const mapAlert = (a: any) => {
+    const rawSev = String(a.severity || 'MODERATE').toUpperCase();
+    const severity =
+      rawSev === 'CRITICAL' ? 'Critical' : rawSev === 'HIGH' || rawSev === 'WARNING' ? 'High' : 'Moderate';
+    const isCrit = severity === 'Critical';
+    const isHigh = severity === 'High';
+    return {
+      id: a.alert_id || a.notification_id,
+      notificationId: a.notification_id,
+      severity,
+      time: formatRelativeTime(a.published_at || a.created_at),
+      icon: isCrit ? (
+        <Ionicons name="warning-outline" size={18} color="#DC2626" />
+      ) : isHigh ? (
+        <Feather name="cloud-rain" size={18} color="#D97706" />
+      ) : (
+        <MaterialCommunityIcons name="cone" size={18} color="#EA580C" />
+      ),
+      title: a.title || 'GeoSense Alert',
+      corridor: a.location_name || a.state || 'Meghalaya',
+      desc: a.description || a.message || '',
+      source: a.source || 'GeoSense Early Warning',
+      accentColor: isCrit ? '#DC2626' : isHigh ? '#D97706' : '#EA580C',
+      badgeBg: isCrit ? '#FEE2E2' : isHigh ? '#FEF3C7' : '#FFEDD5',
+      badgeText: isCrit ? '#DC2626' : isHigh ? '#B45309' : '#C2410C',
+      target: 'officer-mission' as const,
+    };
+  };
 
   useEffect(() => {
-    if (!geoSenseApi.getToken()) return;
-    geoSenseApi.getNotifications()
-      .then((res) => {
-        if (res?.notifications?.length) setLiveOfficerAlerts(res.notifications);
-      })
-      .catch(() => {});
+    let active = true;
+    const load = async () => {
+      if (!geoSenseApi.getToken()) {
+        if (active) setLoading(false);
+        return;
+      }
+      try {
+        const res = await geoSenseApi.getAlerts({ limit: 50 });
+        if (active) {
+          setAlerts((res?.alerts || []).map(mapAlert));
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const filters = [
-    { label: 'All 3', key: 'All' },
-    { label: 'Critical 1', key: 'Critical' },
-    { label: 'High 1', key: 'High' },
-    { label: 'Moderate 1', key: 'Moderate' },
-  ];
+  const critCount = alerts.filter((a) => a.severity === 'Critical').length;
+  const highCount = alerts.filter((a) => a.severity === 'High').length;
+  const modCount = alerts.filter((a) => a.severity === 'Moderate').length;
 
-  const alerts = [
-    {
-      id: '1',
-      severity: 'Critical',
-      time: '09:35 AM',
-      icon: <Ionicons name="warning-outline" size={18} color="#DC2626" />,
-      title: 'Landslide warning',
-      corridor: 'Sohra slope · SH-5 corridor',
-      desc: 'Rapid soil movement detected after prolonged rainfall. Avoid the slope and verify on site.',
-      source: 'GeoSense AI • 96% confidence',
-      accentColor: '#DC2626',
-      badgeBg: '#FEE2E2',
-      badgeText: '#DC2626',
-      target: 'officer-mission' as const,
-    },
-    {
-      id: '2',
-      severity: 'High',
-      time: '09:18 AM',
-      icon: <Feather name="cloud-rain" size={18} color="#D97706" />,
-      title: 'Heavy rainfall alert',
-      corridor: 'Mawsynram & adjoining areas',
-      desc: '82 mm recorded in 3 hours. Further intense rainfall likely. Monitor vulnerable slopes.',
-      source: 'IMD • District control room',
-      accentColor: '#D97706',
-      badgeBg: '#FEF3C7',
-      badgeText: '#B45309',
-      target: 'officer-mission' as const,
-    },
-    {
-      id: '3',
-      severity: 'Moderate',
-      time: '08:54 AM',
-      icon: <MaterialCommunityIcons name="cone" size={18} color="#EA580C" />,
-      title: 'Road partially blocked',
-      corridor: 'Pynursla road · NH-206',
-      desc: 'Debris cleared from one lane. Proceed with caution; traffic is moving slowly.',
-      source: 'PWD • Road status update',
-      accentColor: '#EA580C',
-      badgeBg: '#FFEDD5',
-      badgeText: '#C2410C',
-      target: 'officer-verification' as const,
-    },
+  const filters = [
+    { label: `All ${alerts.length}`, key: 'All' },
+    { label: `Critical ${critCount}`, key: 'Critical' },
+    { label: `High ${highCount}`, key: 'High' },
+    { label: `Moderate ${modCount}`, key: 'Moderate' },
   ];
 
   const filteredAlerts = alerts.filter(
@@ -86,7 +90,7 @@ export function OfficerAlertsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <HeaderBar
         title="Alerts"
-        subtitle="EAST KHASI HILLS"
+        subtitle={(currentUser?.assigned_district || 'EAST KHASI HILLS').toUpperCase()}
         variant="officer-dark"
         rightAction={
           <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>

@@ -11,18 +11,26 @@ import {
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
+import { geoSenseApi } from '@/services/api';
 
 export function OfflineMapsScreen() {
-  const [syncTime, setSyncTime] = useState('07 Nov 2026 · 09:36 AM');
+  const [syncTime, setSyncTime] = useState('Not synced yet');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const handleSync = () => {
+  const handleSync = async () => {
     setIsSyncing(true);
-    setTimeout(() => {
+    try {
+      const summary = await geoSenseApi.getGisSummary();
+      setSyncTime(`Synced · ${new Date().toLocaleTimeString()}`);
+      Alert.alert(
+        'Synchronized',
+        `GIS summary synced (${summary?.total_risk_locations ?? 0} risk locations, ${summary?.total_resources ?? 0} resources).`
+      );
+    } catch {
+      Alert.alert('Sync Failed', 'Unable to reach GeoSense backend server.');
+    } finally {
       setIsSyncing(false);
-      setSyncTime('Today, Just now');
-      Alert.alert('Synchronized', 'Offline maps and safety advisories are now up to date.');
-    }, 1200);
+    }
   };
 
   return (
