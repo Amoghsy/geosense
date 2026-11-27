@@ -120,6 +120,29 @@ public class ApiClient {
         return request("POST", "/agent/chat", body);
     }
 
+    public String getAlerts() throws Exception {
+        return request("GET", "/alerts", null);
+    }
+
+    public String approveAlert(String alertId, String notes) throws Exception {
+        String body = String.format("{\"admin_notes\":\"%s\",\"expiry_hours\":24}", escapeJson(notes));
+        return request("POST", "/alerts/" + alertId + "/approve", body);
+    }
+
+    public String rejectAlert(String alertId, String notes) throws Exception {
+        String body = String.format("{\"admin_notes\":\"%s\"}", escapeJson(notes));
+        return request("POST", "/alerts/" + alertId + "/reject", body);
+    }
+
+    public String publishAlert(String alertId, String notes) throws Exception {
+        String body = String.format("{\"admin_notes\":\"%s\"}", escapeJson(notes));
+        return request("POST", "/alerts/" + alertId + "/publish", body);
+    }
+
+    public String getAlertDeliveries(String alertId) throws Exception {
+        return request("GET", "/alerts/" + alertId + "/deliveries", null);
+    }
+
     public static String extractJsonString(String json, String key) {
         Matcher m = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
         return m.find() ? m.group(1) : "";

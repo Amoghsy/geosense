@@ -753,3 +753,114 @@ def ensure_phase8_schema() -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def ensure_phase9_schema() -> None:
+    """Create Phase 9 alerts, notifications, devices, preferences, and deliveries tables."""
+    ensure_phase8_schema()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS alerts (
+                alert_id TEXT PRIMARY KEY,
+                alert_type TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                location_id TEXT,
+                location_name TEXT,
+                latitude REAL,
+                longitude REAL,
+                state TEXT,
+                district TEXT,
+                assessment_id TEXT,
+                supporting_evidence_json TEXT NOT NULL,
+                source TEXT NOT NULL,
+                approval_status TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
+                approving_authority TEXT,
+                admin_notes TEXT,
+                is_official_public_warning INTEGER NOT NULL DEFAULT 0,
+                expiry_at TEXT,
+                published_at TEXT,
+                dedup_key TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(approval_status, state)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_dedup ON alerts(dedup_key)")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notifications (
+                notification_id TEXT PRIMARY KEY,
+                alert_id TEXT NOT NULL,
+                recipient_user_id TEXT NOT NULL,
+                recipient_role TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                is_read INTEGER NOT NULL DEFAULT 0,
+                read_at TEXT,
+                is_acknowledged INTEGER NOT NULL DEFAULT 0,
+                acknowledged_at TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(recipient_user_id, is_read)")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notification_devices (
+                device_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                fcm_token TEXT NOT NULL,
+                platform TEXT NOT NULL DEFAULT 'android',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id, fcm_token)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                user_id TEXT PRIMARY KEY,
+                email_enabled INTEGER NOT NULL DEFAULT 1,
+                push_enabled INTEGER NOT NULL DEFAULT 1,
+                preferred_state TEXT,
+                preferred_district TEXT,
+                latitude REAL,
+                longitude REAL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notification_deliveries (
+                delivery_id TEXT PRIMARY KEY,
+                notification_id TEXT,
+                alert_id TEXT NOT NULL,
+                recipient_user_id TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                provider_message_id TEXT,
+                delivery_status TEXT NOT NULL,
+                provider_response TEXT,
+                attempt_count INTEGER NOT NULL DEFAULT 1,
+                error_message TEXT,
+                sent_at TEXT,
+                delivered_at TEXT
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_deliveries_alert ON notification_deliveries(alert_id, channel)")
+        conn.commit()
+    finally:
+        conn.close()

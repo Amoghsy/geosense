@@ -327,3 +327,19 @@ def resource_recommendation_tool(
     return resource_service.recommend_resources(
         latitude=latitude, longitude=longitude, radius_km=radius_km, role=role
     )
+
+
+def read_alerts_tool(
+    state: Optional[str] = None,
+    approval_status: Optional[str] = None,
+    role: str = "citizen",
+) -> Dict[str, Any]:
+    """Read-only alert retrieval for Phase 6 agent. Agent NEVER approves or publishes alerts."""
+    from app.services.alert_approval_service import alert_approval_service
+    eff_status = "PUBLISHED" if role == "citizen" else approval_status
+    items = alert_approval_service.list_alerts(state=state, approval_status=eff_status, limit=15)
+    return {
+        "count": len(items),
+        "alerts": items,
+        "advisory_note": "Read-only alert summary. Only authorized human authorities can approve or publish warnings.",
+    }

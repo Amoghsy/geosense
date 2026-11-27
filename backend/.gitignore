@@ -43,3 +43,7 @@ tests/sample_*
 htmlcov/
 .vscode/
 .idea/
+
+# Firebase service account credentials
+*firebase-adminsdk*.json
+serviceAccountKey.json

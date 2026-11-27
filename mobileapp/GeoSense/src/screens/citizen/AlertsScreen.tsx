@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,25 @@ import {
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function AlertsScreen() {
   const { navigate } = useApp();
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [unreadCount, setUnreadCount] = useState(2);
+  const [liveAlerts, setLiveAlerts] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    if (!geoSenseApi.getToken()) return;
+    geoSenseApi.getNotifications()
+      .then((res) => {
+        if (res?.notifications?.length) {
+          setLiveAlerts(res.notifications);
+          setUnreadCount(res.notifications.filter((n) => !n.is_read).length);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const filters = ['All', 'High Risk', 'Weather', 'Road Updates', 'Advisory'];
 

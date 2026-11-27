@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,21 @@ import {
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
+import { geoSenseApi } from '@/services/api';
 
 export function OfficerAlertsScreen() {
   const { navigate } = useApp();
   const [activeFilter, setActiveFilter] = useState('All');
+  const [liveOfficerAlerts, setLiveOfficerAlerts] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    if (!geoSenseApi.getToken()) return;
+    geoSenseApi.getNotifications()
+      .then((res) => {
+        if (res?.notifications?.length) setLiveOfficerAlerts(res.notifications);
+      })
+      .catch(() => {});
+  }, []);
 
   const filters = [
     { label: 'All 3', key: 'All' },

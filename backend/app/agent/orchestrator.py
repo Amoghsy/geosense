@@ -17,6 +17,7 @@ from app.agent.tools import (
     situation_report_tool,
     nearby_resource_finder_tool,
     resource_recommendation_tool,
+    read_alerts_tool,
 )
 from app.services.weather_service import make_location_id
 from app.db.database import (
@@ -232,10 +233,11 @@ class GeoSenseOrchestrator:
         wants_sat = any(w in msg_l for w in ("satellite", "prithvi", "detection", "mask"))
         wants_susc = any(w in msg_l for w in ("susceptib", "multimodal", "phase 2"))
         wants_res = any(w in msg_l for w in ("hospital", "shelter", "ambulance", "rescue", "resource", "relief", "fire station", "police"))
+        wants_alerts = any(w in msg_l for w in ("alert", "warning", "advisory", "notification"))
 
         # Default to risk + weather if general risk question
         wants_risk = any(w in msg_l for w in ("risk", "safe", "status", "current")) or not (
-            wants_situation or wants_hotspots or wants_sat or wants_susc or wants_res
+            wants_situation or wants_hotspots or wants_sat or wants_susc or wants_res or wants_alerts
         )
 
         # 1. Situation Report (Role-restricted)
@@ -388,6 +390,15 @@ class GeoSenseOrchestrator:
                 reply_parts.append(
                     f"No verified {rtype or 'emergency'} resources are currently registered within 25 km of {loc_name}."
                 )
+
+        # 9. Read-Only Alerts (Phase 9)
+        if wants_alerts:
+            tools_used.append("read_alerts_tool")
+            al_out = read_alerts_tool(state=state, role=role)
+            structured_data["alerts"] = al_out["alerts"]
+            reply_parts.append(
+                f"Retrieved {al_out['count']} alert record(s) for {state or 'North Eastern India'}. {al_out['advisory_note']}"
+            )
 
         # Role-based safety note for Citizens
         if role == "citizen":

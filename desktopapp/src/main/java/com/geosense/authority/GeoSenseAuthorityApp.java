@@ -31,9 +31,11 @@ public class GeoSenseAuthorityApp extends Application {
 
     private final ObservableList<IncidentRow> incidentRows = FXCollections.observableArrayList();
     private final ObservableList<ResourceRow> resourceRows = FXCollections.observableArrayList();
+    private final ObservableList<AlertRow> alertRows = FXCollections.observableArrayList();
     private TextArea reportArea;
     private TextArea auditArea;
     private TextArea agentChatArea;
+    private TextArea alertDeliveriesArea;
 
     @Override
     public void start(Stage stage) {
@@ -53,6 +55,7 @@ public class GeoSenseAuthorityApp extends Application {
                 buildOverviewTab(),
                 buildIncidentsTab(),
                 buildResourcesTab(),
+                buildAlertsTab(),
                 buildReportsAndAuditTab(),
                 buildAgentTab()
         );
@@ -221,6 +224,59 @@ public class GeoSenseAuthorityApp extends Application {
         return new Tab("Emergency Resources", box);
     }
 
+    private Tab buildAlertsTab() {
+        TableView<AlertRow> table = new TableView<>(alertRows);
+        TableColumn<AlertRow, String> cId = new TableColumn<>("Alert ID");
+        cId.setCellValueFactory(d -> d.getValue().id);
+        TableColumn<AlertRow, String> cSev = new TableColumn<>("Severity");
+        cSev.setCellValueFactory(d -> d.getValue().severity);
+        TableColumn<AlertRow, String> cTitle = new TableColumn<>("Title");
+        cTitle.setCellValueFactory(d -> d.getValue().title);
+        cTitle.setPrefWidth(260);
+        TableColumn<AlertRow, String> cState = new TableColumn<>("State");
+        cState.setCellValueFactory(d -> d.getValue().state);
+        TableColumn<AlertRow, String> cStatus = new TableColumn<>("Approval");
+        cStatus.setCellValueFactory(d -> d.getValue().status);
+        table.getColumns().addAll(cId, cSev, cTitle, cState, cStatus);
+
+        Button appBtn = new Button("Approve");
+        appBtn.setStyle("-fx-background-color: #38bdf8; -fx-text-fill: #0f172a; -fx-font-weight: bold;");
+        Button pubBtn = new Button("Publish (Email + FCM)");
+        pubBtn.setStyle("-fx-background-color: #10b981; -fx-text-fill: #0f172a; -fx-font-weight: bold;");
+        Button rejBtn = new Button("Reject");
+        rejBtn.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-font-weight: bold;");
+        Button delBtn = new Button("View Deliveries");
+
+        alertDeliveriesArea = new TextArea("Select an alert and click 'View Deliveries' to inspect Email & FCM logs.");
+        alertDeliveriesArea.setEditable(false);
+        alertDeliveriesArea.setPrefHeight(160);
+
+        appBtn.setOnAction(e -> {
+            AlertRow sel = table.getSelectionModel().getSelectedItem();
+            if (sel != null) runAsync(() -> { api.approveAlert(sel.id.get(), "Approved in JavaFX"); refreshAllData(); });
+        });
+        pubBtn.setOnAction(e -> {
+            AlertRow sel = table.getSelectionModel().getSelectedItem();
+            if (sel != null) runAsync(() -> { api.publishAlert(sel.id.get(), "Published in JavaFX"); refreshAllData(); });
+        });
+        rejBtn.setOnAction(e -> {
+            AlertRow sel = table.getSelectionModel().getSelectedItem();
+            if (sel != null) runAsync(() -> { api.rejectAlert(sel.id.get(), "Rejected in JavaFX"); refreshAllData(); });
+        });
+        delBtn.setOnAction(e -> {
+            AlertRow sel = table.getSelectionModel().getSelectedItem();
+            if (sel != null) runAsync(() -> {
+                String d = api.getAlertDeliveries(sel.id.get());
+                Platform.runLater(() -> alertDeliveriesArea.setText(d));
+            });
+        });
+
+        HBox actions = new HBox(10, appBtn, pubBtn, rejBtn, delBtn);
+        VBox box = new VBox(12, actions, table, alertDeliveriesArea);
+        box.setPadding(new Insets(16));
+        return new Tab("Alert Management Centre", box);
+    }
+
     private Tab buildReportsAndAuditTab() {
         ComboBox<String> stateBox = new ComboBox<>(FXCollections.observableArrayList(
                 "", "meghalaya", "sikkim", "assam", "arunachal_pradesh", "manipur", "mizoram", "nagaland", "tripura"
@@ -287,10 +343,12 @@ public class GeoSenseAuthorityApp extends Application {
         String dash = api.getAuthorityDashboard();
         String incsJson = api.getAuthorityIncidents();
         String resJson = api.getResources();
+        String alertsJson = api.getAlerts();
         String audJson = api.getAuditLogs();
 
         List<String> incObjs = ApiClient.splitJsonObjectsInArray(incsJson, "incidents");
         List<String> resObjs = ApiClient.splitJsonObjectsInArray(resJson, "resources");
+        List<String> alertObjs = ApiClient.splitJsonObjectsInArray(alertsJson, "alerts");
 
         Platform.runLater(() -> {
             kpiRiskLocs.setText(ApiClient.extractJsonNumber(dash, "total_risk_assessments"));
@@ -321,6 +379,17 @@ public class GeoSenseAuthorityApp extends Application {
                         ApiClient.extractJsonString(obj, "verification_status"),
                         ApiClient.extractJsonString(obj, "operational_status"),
                         ApiClient.extractJsonString(obj, "availability_status")
+                ));
+            }
+
+            alertRows.clear();
+            for (String obj : alertObjs) {
+                alertRows.add(new AlertRow(
+                        ApiClient.extractJsonString(obj, "alert_id"),
+                        ApiClient.extractJsonString(obj, "severity"),
+                        ApiClient.extractJsonString(obj, "title"),
+                        ApiClient.extractJsonString(obj, "state"),
+                        ApiClient.extractJsonString(obj, "approval_status")
                 ));
             }
 
@@ -381,6 +450,17 @@ public class GeoSenseAuthorityApp extends Application {
             this.verification = new SimpleStringProperty(verification);
             this.operational = new SimpleStringProperty(operational);
             this.availability = new SimpleStringProperty(availability);
+        }
+    }
+
+    public static class AlertRow {
+        final SimpleStringProperty id, severity, title, state, status;
+        AlertRow(String id, String severity, String title, String state, String status) {
+            this.id = new SimpleStringProperty(id);
+            this.severity = new SimpleStringProperty(severity);
+            this.title = new SimpleStringProperty(title);
+            this.state = new SimpleStringProperty(state);
+            this.status = new SimpleStringProperty(status);
         }
     }
 

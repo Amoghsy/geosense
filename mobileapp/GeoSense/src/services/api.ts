@@ -137,6 +137,42 @@ class GeoSenseApiClient {
       body: JSON.stringify({ message, role, session_id: sessionId }),
     });
   }
+
+  async getNotifications(unreadOnly = false) {
+    return this.request<{ count: number; notifications: any[] }>(
+      `/notifications?unread_only=${unreadOnly}`
+    );
+  }
+
+  async markNotificationRead(notificationId: string) {
+    return this.request<any>(`/notifications/${notificationId}/read`, { method: 'PATCH' });
+  }
+
+  async acknowledgeAlert(alertId: string) {
+    return this.request<any>(`/alerts/${alertId}/acknowledge`, { method: 'POST' });
+  }
+
+  async registerFcmDevice(fcmToken: string, platform: 'android' | 'ios' | 'web' = 'android') {
+    return this.request<{ device_id: string }>('/notifications/devices/register', {
+      method: 'POST',
+      body: JSON.stringify({ fcm_token: fcmToken, platform }),
+    });
+  }
+
+  async unregisterFcmDevice(deviceId: string) {
+    return this.request<any>(`/notifications/devices/${deviceId}`, { method: 'DELETE' });
+  }
+
+  async updateNotificationPreferences(prefs: {
+    email_enabled?: boolean;
+    push_enabled?: boolean;
+    preferred_state?: string;
+  }) {
+    return this.request<any>('/notifications/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(prefs),
+    });
+  }
 }
 
 export const geoSenseApi = new GeoSenseApiClient();
