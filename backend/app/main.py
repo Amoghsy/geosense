@@ -11,6 +11,7 @@ from app.api.susceptibility_routes import router as susceptibility_router
 from app.api.risk_routes import router as risk_router
 from app.api.gis_routes import router as gis_router
 from app.api.agent_routes import router as agent_router
+from app.api.resource_routes import router as resource_router
 from app.ml.model_loader import get_model_manager
 from app.db.database import init_db
 
@@ -86,6 +87,8 @@ app.include_router(gis_router)
 app.include_router(gis_router, prefix="/api")
 app.include_router(agent_router)
 app.include_router(agent_router, prefix="/api")
+app.include_router(resource_router)
+app.include_router(resource_router, prefix="/api")
 
 # Static files for results directory
 app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
@@ -152,6 +155,15 @@ async def serve_agent_ui():
     if os.path.isfile(html_file):
         return FileResponse(html_file, media_type="text/html")
     return HTMLResponse("<h1>GeoSense Phase 6 AI Agent</h1><p>Visit <a href='/docs'>/docs</a></p>")
+
+
+@app.get("/resources-ui", response_class=HTMLResponse, include_in_schema=False)
+async def serve_resources_ui():
+    """Serve the Phase 7 Emergency Resource Management Dashboard."""
+    html_file = os.path.join(STATIC_DIR, "resources.html")
+    if os.path.isfile(html_file):
+        return FileResponse(html_file, media_type="text/html")
+    return HTMLResponse("<h1>GeoSense Phase 7 Emergency Resources</h1><p>Visit <a href='/docs'>/docs</a></p>")
 
 
 if __name__ == "__main__":

@@ -295,3 +295,35 @@ async def situation_report_tool(
             "or replace statutory disaster-management procedures."
         ),
     }
+
+
+def nearby_resource_finder_tool(
+    latitude: float,
+    longitude: float,
+    radius_km: float = 25.0,
+    resource_type: Optional[str] = None,
+    role: str = "citizen",
+) -> Dict[str, Any]:
+    """Retrieve verified nearby emergency resources (hospitals, shelters, ambulances, rescue teams)."""
+    from app.services.resource_service import resource_service
+    return resource_service.search_nearby(
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        resource_type=resource_type,
+        operational_only=True,
+        role=role,
+    )
+
+
+def resource_recommendation_tool(
+    latitude: float,
+    longitude: float,
+    radius_km: float = 25.0,
+    role: str = "citizen",
+) -> Dict[str, Any]:
+    """Provide transparent advisory recommendations of verified nearby emergency resources."""
+    from app.services.resource_service import resource_service
+    return resource_service.recommend_resources(
+        latitude=latitude, longitude=longitude, radius_km=radius_km, role=role
+    )

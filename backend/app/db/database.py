@@ -595,3 +595,61 @@ def update_agent_session(
         conn.commit()
     finally:
         conn.close()
+
+
+def ensure_phase7_resource_schema() -> None:
+    """Safely migrate emergency_resources and create resource_history in SQLite."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        existing_cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(emergency_resources)").fetchall()
+        }
+        new_cols = {
+            "resource_name": "TEXT",
+            "description": "TEXT",
+            "address": "TEXT",
+            "state": "TEXT",
+            "district": "TEXT",
+            "contact_number": "TEXT",
+            "is_public_contact": "INTEGER DEFAULT 0",
+            "capacity": "INTEGER",
+            "current_occupancy": "INTEGER",
+            "availability_status": "TEXT DEFAULT 'UNKNOWN'",
+            "operational_status": "TEXT DEFAULT 'UNKNOWN'",
+            "verification_status": "TEXT DEFAULT 'PENDING'",
+            "source": "TEXT DEFAULT 'Manual Registration'",
+            "last_verified_at": "TEXT",
+            "updated_at": "TEXT",
+        }
+        for col_name, col_def in new_cols.items():
+            if col_name not in existing_cols:
+                conn.execute(f"ALTER TABLE emergency_resources ADD COLUMN {col_name} {col_def}")
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_emergency_resources_coords ON emergency_resources(latitude, longitude)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_emergency_resources_status ON emergency_resources(verification_status, operational_status)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS resource_history (
+                history_id TEXT PRIMARY KEY,
+                resource_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                actor_id TEXT,
+                previous_state_json TEXT,
+                new_state_json TEXT NOT NULL,
+                notes TEXT,
+                timestamp TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_resource_history_rid ON resource_history(resource_id)"
+        )
+        conn.commit()
+    finally:
+        conn.close()

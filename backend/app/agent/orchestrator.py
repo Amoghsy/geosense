@@ -15,6 +15,8 @@ from app.agent.tools import (
     historical_trend_tool,
     hotspot_prioritization_tool,
     situation_report_tool,
+    nearby_resource_finder_tool,
+    resource_recommendation_tool,
 )
 from app.services.weather_service import make_location_id
 from app.db.database import (
@@ -229,10 +231,11 @@ class GeoSenseOrchestrator:
         wants_weather = any(w in msg_l for w in ("rain", "weather", "forecast", "awi", "wetness", "storm"))
         wants_sat = any(w in msg_l for w in ("satellite", "prithvi", "detection", "mask"))
         wants_susc = any(w in msg_l for w in ("susceptib", "multimodal", "phase 2"))
+        wants_res = any(w in msg_l for w in ("hospital", "shelter", "ambulance", "rescue", "resource", "relief", "fire station", "police"))
 
         # Default to risk + weather if general risk question
         wants_risk = any(w in msg_l for w in ("risk", "safe", "status", "current")) or not (
-            wants_situation or wants_hotspots or wants_sat or wants_susc
+            wants_situation or wants_hotspots or wants_sat or wants_susc or wants_res
         )
 
         # 1. Situation Report (Role-restricted)
@@ -358,6 +361,33 @@ class GeoSenseOrchestrator:
             reply_parts.append(
                 susc.get("coverage_disclaimer") or susc.get("message")
             )
+
+        # 8. Emergency Resources (Phase 7)
+        if wants_res and lat is not None and lon is not None:
+            tools_used.append("nearby_resource_finder_tool")
+            rtype = None
+            if "hospital" in msg_l:
+                rtype = "HOSPITAL"
+            elif "shelter" in msg_l:
+                rtype = "SHELTER"
+            elif "ambulance" in msg_l:
+                rtype = "AMBULANCE"
+            elif "rescue" in msg_l:
+                rtype = "RESCUE_TEAM"
+            res_out = nearby_resource_finder_tool(lat, lon, radius_km=25.0, resource_type=rtype, role=role)
+            structured_data["nearby_resources"] = res_out
+            sources.append("GeoSense Verified Emergency Resources")
+            if res_out["count"] > 0:
+                top_r = res_out["resources"][0]
+                reply_parts.append(
+                    f"Found {res_out['count']} verified resource(s) within 25 km (straight-line distance). "
+                    f"Nearest: {top_r['resource_name']} ({top_r['resource_type']}, {top_r['distance_km']} km straight-line, "
+                    f"operational: {top_r['operational_status']}, availability: {top_r['availability_status']})."
+                )
+            else:
+                reply_parts.append(
+                    f"No verified {rtype or 'emergency'} resources are currently registered within 25 km of {loc_name}."
+                )
 
         # Role-based safety note for Citizens
         if role == "citizen":

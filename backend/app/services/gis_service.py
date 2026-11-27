@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from shapely.geometry import Point, shape, box, mapping
 
-from app.db.database import get_db_connection, init_db, DB_PATH
+from app.db.database import get_db_connection, init_db, ensure_phase7_resource_schema, DB_PATH
 from app.gis.geo_utils import (
     validate_coordinates,
     parse_bbox,
@@ -39,6 +39,7 @@ class GISService:
         self._states_cache: Optional[Dict[str, Any]] = None
         self._layer_enabled_state: Dict[str, bool] = {}
         init_db()
+        ensure_phase7_resource_schema()
 
     def _load_states_geojson(self) -> Dict[str, Any]:
         if self._states_cache is not None:
@@ -278,7 +279,7 @@ class GISService:
         terrain = self._get_phase3_risk_features("terrain")
         cit_inc = self._get_table_point_features("incidents", "WHERE reporter_type = 'citizen'")
         ver_inc = self._get_table_point_features("incidents", "WHERE status = 'verified'")
-        res_pts = self._get_table_point_features("emergency_resources")
+        res_pts = self._get_table_point_features("emergency_resources", "WHERE verification_status = 'VERIFIED'")
 
         catalog = [
             {
@@ -416,7 +417,7 @@ class GISService:
             "terrain_attributes": lambda: self._get_phase3_risk_features("terrain"),
             "citizen_incidents": lambda: self._get_table_point_features("incidents", "WHERE reporter_type = 'citizen'"),
             "verified_incidents": lambda: self._get_table_point_features("incidents", "WHERE status = 'verified'"),
-            "emergency_resources": lambda: self._get_table_point_features("emergency_resources"),
+            "emergency_resources": lambda: self._get_table_point_features("emergency_resources", "WHERE verification_status = 'VERIFIED'"),
         }
         if layer_id not in raw_map:
             return None

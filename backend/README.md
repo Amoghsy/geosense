@@ -431,3 +431,25 @@ Phase 6 implements a grounded **GeoSense Orchestrator Agent** that queries real 
 - `POST /agent/sessions` & `GET /agent/sessions/{session_id}`
 - `POST /agent/chat`
 - `POST /agent/situation-report` (restricted to `field_officer` and `authority` roles)
+
+
+---
+
+## 16. Phase 7 — Emergency Resource Management
+
+Phase 7 adds a centralized, role-gated geospatial emergency resource management system integrated with the Phase 4 GIS map and Phase 6 AI Decision-Support Agent.
+
+### Supported Resource Categories:
+`HOSPITAL`, `HEALTH_CENTRE`, `AMBULANCE`, `SHELTER`, `RESCUE_TEAM`, `FIRE_STATION`, `POLICE_STATION`, `RELIEF_CENTRE`, `HEAVY_EQUIPMENT`.
+
+### Verification Workflow & Safeguards:
+- **Verification Status:** `PENDING`, `VERIFIED`, `REJECTED`.
+- **Operational Status:** `OPERATIONAL`, `TEMPORARILY_UNAVAILABLE`, `CLOSED`, `UNKNOWN`.
+- **Availability Status:** `AVAILABLE`, `LIMITED`, `FULL`, `UNAVAILABLE`, `UNKNOWN`.
+- Newly registered or OpenStreetMap-imported facilities always start as `PENDING` / `UNKNOWN` and are hidden from citizens until verified by an Authority. Private contacts are redacted for citizens, and straight-line Haversine distances are explicitly distinguished from road travel time.
+
+### Phase 7 Endpoints & Dashboard:
+- **Resource Management Dashboard:** `http://localhost:8000/resources-ui`
+- `POST /resources`, `GET /resources`, `GET /resources/{resource_id}`, `PATCH /resources/{resource_id}`
+- `POST /resources/{resource_id}/verify`, `PATCH /resources/{resource_id}/availability`, `GET /resources/{resource_id}/history`
+- `GET /resources/near`, `GET /resources/recommend`, `GET /resources/statistics`, `POST /resources/import-osm`

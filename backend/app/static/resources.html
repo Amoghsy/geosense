@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoSense Phase 7 — Emergency Resource Management</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a; --card: #1e293b; --subtle: #182234; --border: #334155;
+      --text: #f8fafc; --muted: #94a3b8; --blue: #38bdf8;
+      --green: #10b981; --amber: #f59e0b; --red: #ef4444;
+      --mono: 'JetBrains Mono', monospace; --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: rgba(15,23,42,0.95); border-bottom: 1px solid var(--border); padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+    nav { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 6px; border: 1px solid var(--border); }
+    nav a.active { background: var(--blue); color: #0f172a; border-color: var(--blue); font-weight: 600; }
+    .banner { background: rgba(245,158,11,0.1); border-bottom: 1px solid rgba(245,158,11,0.25); padding: 0.55rem 1.5rem; font-size: 0.78rem; color: #fde68a; text-align: center; }
+    main { max-width: 1380px; width: 100%; margin: 0 auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
+    .scard { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; }
+    .scard .val { font-size: 1.35rem; font-weight: 700; font-family: var(--mono); }
+    .scard .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+    .grid2 { display: grid; grid-template-columns: 400px 1fr; gap: 1.25rem; }
+    @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.85rem; }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input, select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.82rem; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    .btn { background: var(--blue); color: #0f172a; border: none; padding: 0.55rem 0.85rem; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+    #map { height: 340px; border-radius: 8px; border: 1px solid var(--border); z-index: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th, td { text-align: left; padding: 0.45rem 0.55rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); }
+    .badge { font-size: 0.68rem; padding: 0.15rem 0.45rem; border-radius: 4px; font-family: var(--mono); }
+    .b-ver { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+    .b-pend { background: rgba(245,158,11,0.2); color: #fde68a; }
+    .b-rej { background: rgba(239,68,68,0.2); color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display:flex;align-items:center;gap:0.6rem;">
+      <div style="width:32px;height:32px;background:linear-gradient(135deg,#ef4444,#f59e0b);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;">G7</div>
+      <div>
+        <div style="font-weight:700;font-size:1.05rem;">GeoSense — Emergency Resource Management</div>
+        <div style="font-size:0.72rem;color:var(--muted);">Phase 7: Verified Hospitals, Shelters, Ambulances & Rescue Coordination</div>
+      </div>
+    </div>
+    <nav>
+      <a href="/">Phase 1</a>
+      <a href="/susceptibility-ui">Phase 2</a>
+      <a href="/risk-ui">Phase 3</a>
+      <a href="/gis-ui">Phase 4: GIS</a>
+      <a href="/xai-ui">Phase 5: XAI</a>
+      <a href="/agent-ui">Phase 6: Agent</a>
+      <a href="/resources-ui" class="active">Phase 7: Resources</a>
+    </nav>
+  </header>
+
+  <div class="banner">
+    <strong>Operational Safeguards:</strong> Straight-line geographic distances do not represent road travel time. Unknown capacity/availability is never assumed available. Only VERIFIED resources are shown to citizens.
+  </div>
+
+  <main>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+      <div style="width:260px;">
+        <label>Active Role</label>
+        <select id="role">
+          <option value="authority">Disaster Authority (Full Admin & Verify)</option>
+          <option value="field_officer">Field Officer (Register & Update)</option>
+          <option value="citizen">Citizen (Verified Public Discovery Only)</option>
+        </select>
+      </div>
+      <div id="stats-row" class="stats-row" style="flex:1;"></div>
+    </div>
+
+    <div class="grid2">
+      <!-- Left: Nearby Search & Authority Registration -->
+      <div class="panel">
+        <div style="font-weight:600;color:var(--blue);">Nearby Verified Resource Search</div>
+        <div class="row2">
+          <div><label>Latitude</label><input type="number" step="0.0001" id="n-lat" value="25.5788"></div>
+          <div><label>Longitude</label><input type="number" step="0.0001" id="n-lon" value="91.8933"></div>
+        </div>
+        <div class="row2">
+          <div><label>Radius</label>
+            <select id="n-rad">
+              <option value="5">5 km</option>
+              <option value="10">10 km</option>
+              <option value="25" selected>25 km</option>
+              <option value="50">50 km</option>
+            </select>
+          </div>
+          <div><label>Category</label>
+            <select id="n-cat">
+              <option value="">All Categories</option>
+              <option value="HOSPITAL">HOSPITAL</option>
+              <option value="HEALTH_CENTRE">HEALTH_CENTRE</option>
+              <option value="AMBULANCE">AMBULANCE</option>
+              <option value="SHELTER">SHELTER</option>
+              <option value="RESCUE_TEAM">RESCUE_TEAM</option>
+              <option value="FIRE_STATION">FIRE_STATION</option>
+              <option value="POLICE_STATION">POLICE_STATION</option>
+              <option value="RELIEF_CENTRE">RELIEF_CENTRE</option>
+              <option value="HEAVY_EQUIPMENT">HEAVY_EQUIPMENT</option>
+            </select>
+          </div>
+        </div>
+        <button id="search-btn" class="btn">Search Nearby Resources</button>
+
+        <div id="admin-form" style="border-top:1px solid var(--border);padding-top:0.8rem;display:flex;flex-direction:column;gap:0.55rem;">
+          <div style="font-weight:600;color:var(--amber);">Register Candidate Resource (PENDING)</div>
+          <div><label>Facility Name</label><input type="text" id="c-name" placeholder="e.g. Shillong Civil Hospital"></div>
+          <div class="row2">
+            <div><label>Category</label>
+              <select id="c-type">
+                <option value="HOSPITAL">HOSPITAL</option>
+                <option value="SHELTER">SHELTER</option>
+                <option value="AMBULANCE">AMBULANCE</option>
+                <option value="RESCUE_TEAM">RESCUE_TEAM</option>
+                <option value="FIRE_STATION">FIRE_STATION</option>
+                <option value="RELIEF_CENTRE">RELIEF_CENTRE</option>
+              </select>
+            </div>
+            <div><label>State</label><input type="text" id="c-state" value="Meghalaya"></div>
+          </div>
+          <div class="row2">
+            <div><label>Latitude</label><input type="number" step="0.0001" id="c-lat" value="25.5760"></div>
+            <div><label>Longitude</label><input type="number" step="0.0001" id="c-lon" value="91.8820"></div>
+          </div>
+          <div class="row2">
+            <div><label>Contact (optional)</label><input type="text" id="c-phone" placeholder="Official helpline"></div>
+            <div><label>Public Contact?</label>
+              <select id="c-pub"><option value="true">Yes (Public)</option><option value="false">No (Restricted)</option></select>
+            </div>
+          </div>
+          <button id="create-btn" class="btn" style="background:var(--amber);">Register Resource</button>
+          <div id="msg-out" style="font-size:0.78rem;color:var(--green);"></div>
+        </div>
+      </div>
+
+      <!-- Right: Map & Table -->
+      <div class="panel">
+        <div id="map"></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Dist (km)</th><th>Verify</th><th>Op Status</th><th>Avail</th><th>Actions</th></tr></thead>
+            <tbody id="res-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const map = L.map('map').setView([25.5788, 91.8933], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+    const markersLayer = L.layerGroup().addTo(map);
+
+    async function loadStats() {
+      const role = document.getElementById('role').value;
+      const box = document.getElementById('stats-row');
+      if (role === 'citizen') { box.innerHTML = ''; return; }
+      const res = await fetch(`/resources/statistics?role=${role}`);
+      if (!res.ok) return;
+      const s = await res.json();
+      box.innerHTML = `
+        <div class="scard"><div class="val">${s.total_resources}</div><div class="lbl">Total</div></div>
+        <div class="scard"><div class="val" style="color:var(--green)">${s.verified_resources}</div><div class="lbl">Verified</div></div>
+        <div class="scard"><div class="val" style="color:var(--amber)">${s.pending_verification}</div><div class="lbl">Pending</div></div>
+        <div class="scard"><div class="val">${s.operational_resources}</div><div class="lbl">Operational</div></div>
+      `;
+    }
+
+    async function loadAllResources() {
+      const role = document.getElementById('role').value;
+      document.getElementById('admin-form').style.display = (role === 'citizen') ? 'none' : 'flex';
+      const data = await (await fetch(`/resources?role=${role}`)).json();
+      renderResources(data.resources);
+    }
+
+    function renderResources(list) {
+      const role = document.getElementById('role').value;
+      markersLayer.clearLayers();
+      const tbody = document.getElementById('res-tbody');
+      tbody.innerHTML = list.map(r => {
+        const badgeCls = r.verification_status === 'VERIFIED' ? 'b-ver' : (r.verification_status === 'REJECTED' ? 'b-rej' : 'b-pend');
+        const m = L.circleMarker([r.latitude, r.longitude], {
+          radius: 7, color: '#fff', weight: 1.5,
+          fillColor: r.verification_status === 'VERIFIED' ? '#10b981' : '#f59e0b', fillOpacity: 0.9
+        }).bindPopup(`<strong>${r.resource_name}</strong><br>${r.resource_type} | ${r.verification_status}<br>Op: ${r.operational_status}, Avail: ${r.availability_status}<br>Contact: ${r.contact_number || 'N/A'}`);
+        markersLayer.addLayer(m);
+
+        const actions = (role === 'authority' && r.verification_status === 'PENDING')
+          ? `<button class="btn" style="padding:0.2rem 0.45rem;font-size:0.7rem;background:var(--green);" onclick="verifyRes('${r.resource_id}','VERIFIED')">Verify</button>
+             <button class="btn" style="padding:0.2rem 0.45rem;font-size:0.7rem;background:var(--red);color:#fff;" onclick="verifyRes('${r.resource_id}','REJECTED')">Reject</button>`
+          : '—';
+
+        return `<tr>
+          <td>${r.resource_name}</td><td>${r.resource_type}</td>
+          <td>${r.distance_km !== null ? r.distance_km + ' km' : '—'}</td>
+          <td><span class="badge ${badgeCls}">${r.verification_status}</span></td>
+          <td>${r.operational_status}</td><td>${r.availability_status}</td>
+          <td>${actions}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    window.verifyRes = async (rid, st) => {
+      await fetch(`/resources/${rid}/verify?role=authority`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ verification_status: st, operational_status: st === 'VERIFIED' ? 'OPERATIONAL' : 'CLOSED', availability_status: st === 'VERIFIED' ? 'AVAILABLE' : 'UNAVAILABLE' })
+      });
+      loadStats(); loadAllResources();
+    };
+
+    document.getElementById('search-btn').addEventListener('click', async () => {
+      const role = document.getElementById('role').value;
+      const lat = document.getElementById('n-lat').value;
+      const lon = document.getElementById('n-lon').value;
+      const rad = document.getElementById('n-rad').value;
+      const cat = document.getElementById('n-cat').value;
+      const p = new URLSearchParams({ latitude: lat, longitude: lon, radius_km: rad, role });
+      if (cat) p.set('resource_type', cat);
+      const d = await (await fetch(`/resources/near?${p.toString()}`)).json();
+      map.setView([parseFloat(lat), parseFloat(lon)], 11);
+      renderResources(d.resources);
+    });
+
+    document.getElementById('create-btn').addEventListener('click', async () => {
+      const role = document.getElementById('role').value;
+      const body = {
+        resource_name: document.getElementById('c-name').value,
+        resource_type: document.getElementById('c-type').value,
+        state: document.getElementById('c-state').value,
+        latitude: parseFloat(document.getElementById('c-lat').value),
+        longitude: parseFloat(document.getElementById('c-lon').value),
+        contact_number: document.getElementById('c-phone').value || null,
+        is_public_contact: document.getElementById('c-pub').value === 'true'
+      };
+      const res = await fetch(`/resources?role=${role}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        document.getElementById('msg-out').textContent = 'Resource registered as PENDING verification.';
+        loadStats(); loadAllResources();
+      }
+    });
+
+    document.getElementById('role').addEventListener('change', () => { loadStats(); loadAllResources(); });
+    loadStats(); loadAllResources();
+  </script>
+</body>
+</html>
