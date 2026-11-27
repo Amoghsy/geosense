@@ -100,6 +100,74 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gis_layers (
+                layer_id TEXT PRIMARY KEY,
+                layer_name TEXT NOT NULL,
+                layer_type TEXT NOT NULL,
+                source TEXT NOT NULL,
+                description TEXT NOT NULL,
+                crs TEXT NOT NULL,
+                geographic_coverage TEXT NOT NULL,
+                resolution TEXT,
+                last_updated TEXT NOT NULL,
+                availability_status TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                metadata_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gis_features (
+                feature_id TEXT PRIMARY KEY,
+                layer_id TEXT NOT NULL,
+                geometry_type TEXT NOT NULL,
+                srid INTEGER NOT NULL DEFAULT 4326,
+                min_lon REAL NOT NULL,
+                min_lat REAL NOT NULL,
+                max_lon REAL NOT NULL,
+                max_lat REAL NOT NULL,
+                geometry_json TEXT NOT NULL,
+                properties_json TEXT NOT NULL,
+                region_id TEXT,
+                risk_category TEXT,
+                feature_timestamp TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gis_features_layer ON gis_features(layer_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gis_features_bbox ON gis_features(min_lon, max_lon, min_lat, max_lat)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS incidents (
+                id TEXT PRIMARY KEY,
+                reporter_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                description TEXT,
+                region_id TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS emergency_resources (
+                id TEXT PRIMARY KEY,
+                resource_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                region_id TEXT,
+                metadata_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
         logger.info(f"Initialized SQLite database at {DB_PATH}")
     finally:

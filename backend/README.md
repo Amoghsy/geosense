@@ -371,3 +371,26 @@ Phase 3 fuses live Open-Meteo weather, 30-day historical rainfall, Antecedent We
 - `GET /risk/{location_id}`
 - `GET /risk/{assessment_id}/explain`
 - `GET /risk/{assessment_id}/history`
+
+
+---
+
+## 13. Phase 4 — Unified GIS Backend & Interactive Mapping
+
+Phase 4 unifies Phases 1–3 into a spatial GIS layer management system and an interactive Leaflet dashboard.
+
+### GIS Architecture & Storage:
+- **Spatial Processing (`app/gis/geo_utils.py`):** `pyproj` CRS reprojection to `EPSG:4326`, `shapely` bounding-box & point-in-polygon intersection, and `rasterio.features.shapes` mask-to-polygon extraction for Phase 1 GeoTIFFs.
+- **Database & PostGIS (`app/db/database.py` & `app/db/postgis_schema.sql`):** Spatial tables (`gis_layers`, `gis_features` with bounding-box indexes, `incidents`, `emergency_resources`) in SQLite `geosense.db`, plus a ready-to-run PostgreSQL/PostGIS schema (`GIST` indexes, `SRID 4326`).
+- **Authentic Geographic Boundaries (`app/data/ne_india_states.geojson`):** Simplified ADM1 state boundaries for all 8 North Eastern India states sourced from **geoBoundaries gbOpen IND ADM1** (License: CC BY 2.5 IN). District boundaries are explicitly marked unavailable rather than fabricated.
+- **Map Tiles:** OpenStreetMap standard tiles (`© OpenStreetMap contributors`).
+
+### Phase 4 GIS Endpoints & Dashboard:
+- **Interactive GIS Dashboard:** `http://localhost:8000/gis-ui`
+- `GET /gis/health` — GIS backend & spatial dataset status
+- `GET /gis/layers` & `GET /gis/layers/{layer_id}` — Unified layer catalog (Phase 1–3, terrain, incidents, emergency resources)
+- `GET /gis/layers/{layer_id}/features` — Paginated GeoJSON FeatureCollection with `bbox`, `region`, `risk_category`, `start_date`, `end_date` filters
+- `GET /gis/regions/states` & `GET /gis/regions/districts`
+- `GET /gis/hotspots` — Elevated (`HIGH` / `CRITICAL`) Phase 3 grid locations
+- `GET /gis/location` — Spatial query returning state + nearest/intersecting Phase 1–3 data
+- `GET /gis/summary` — Real counts from stored assessments and detections
