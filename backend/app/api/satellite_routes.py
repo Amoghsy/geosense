@@ -16,6 +16,10 @@ from app.services.satellite_service import satellite_service
 router = APIRouter()
 
 
+# ==========================================
+# Health & Status Endpoints
+# ==========================================
+
 @router.get(
     "/health",
     response_model=HealthResponse,
@@ -43,15 +47,19 @@ async def get_model_status():
     return ModelStatusResponse(**status_dict)
 
 
+# ==========================================
+# Detection Endpoints
+# ==========================================
+
 @router.post(
-    "/satellite/detect",
+    "/detect",
     response_model=DetectionResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Validation error for invalid satellite format or bands"},
         503: {"model": ErrorResponse, "description": "Model is not loaded or weights are unavailable"}
     },
     tags=["Landslide Detection"],
-    summary="Detect Landslides from Satellite Imagery",
+    summary="Detect Landslides from Satellite Imagery (/detect)",
     description="""
 Upload a multi-band satellite image to perform pixel-level landslide segmentation using the Hugging Face Prithvi model.
 
@@ -97,85 +105,124 @@ async def detect_landslide(file: UploadFile = File(..., description="Satellite i
         )
 
 
-@router.get(
-    "/satellite/results/{result_id}",
-    tags=["Landslide Detection"],
-    summary="Retrieve Analysis Metadata",
-    description="Retrieve the analysis statistics, landslide pixel percentage, and output file routes for a prior detection run."
+# Backward compatibility alias for /api/satellite/detect
+@router.post(
+    "/satellite/detect",
+    response_model=DetectionResponse,
+    include_in_schema=False
 )
-async def get_detection_result(result_id: str):
-    metadata = satellite_service.get_result_metadata(result_id)
+async def detect_satellite_alias(file: UploadFile = File(...)):
+    return await detect_landslide(file)
+
+
+# ==========================================
+# Result & Artifact Retrieval Endpoints
+# ==========================================
+
+@router.get(
+    "/detect/{detection_id}",
+    tags=["Landslide Detection"],
+    summary="Retrieve Detection Result Metadata",
+    description="Retrieve the analysis statistics, landslide pixel percentage, geospatial info, and file routes for a detection run."
+)
+async def get_detection_result(detection_id: str):
+    metadata = satellite_service.get_result_metadata(detection_id)
     if not metadata:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Result with id '{result_id}' not found."
+            detail=f"Detection with ID '{detection_id}' not found."
         )
     return metadata
 
 
 @router.get(
-    "/satellite/results/{result_id}/overlay",
+    "/detect/{detection_id}/overlay",
     tags=["Landslide Detection"],
     summary="Retrieve Colored Overlay Image",
     description="Retrieve the visual colored overlay image highlighting detected landslide regions over the satellite base image."
 )
-async def get_overlay_image(result_id: str):
-    file_path = satellite_service.get_result_file_path(result_id, "overlay")
+async def get_overlay_image(detection_id: str):
+    file_path = satellite_service.get_result_file_path(detection_id, "overlay")
     if not file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Overlay image for result '{result_id}' not found."
+            detail=f"Overlay image for detection '{detection_id}' not found."
         )
-    return FileResponse(file_path, media_type="image/png", filename=f"overlay_{result_id}.png")
+    return FileResponse(file_path, media_type="image/png", filename=f"overlay_{detection_id}.png")
 
 
 @router.get(
-    "/satellite/results/{result_id}/original",
+    "/detect/{detection_id}/original",
     tags=["Landslide Detection"],
     summary="Retrieve Original Satellite RGB Image",
     description="Retrieve the RGB visual composite generated from the satellite input bands."
 )
-async def get_original_image(result_id: str):
-    file_path = satellite_service.get_result_file_path(result_id, "original")
+async def get_original_image(detection_id: str):
+    file_path = satellite_service.get_result_file_path(detection_id, "original")
     if not file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Original visual image for result '{result_id}' not found."
+            detail=f"Original visual image for detection '{detection_id}' not found."
         )
-    return FileResponse(file_path, media_type="image/png", filename=f"original_{result_id}.png")
+    return FileResponse(file_path, media_type="image/png", filename=f"original_{detection_id}.png")
 
 
 @router.get(
-    "/satellite/results/{result_id}/mask",
+    "/detect/{detection_id}/mask",
     tags=["Landslide Detection"],
     summary="Retrieve Binary Segmentation Mask Image",
     description="Retrieve the binary segmentation mask image (black: non-landslide, white: landslide)."
 )
-async def get_mask_image(result_id: str):
-    file_path = satellite_service.get_result_file_path(result_id, "mask")
+async def get_mask_image(detection_id: str):
+    file_path = satellite_service.get_result_file_path(detection_id, "mask")
     if not file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Mask image for result '{result_id}' not found."
+            detail=f"Mask image for detection '{detection_id}' not found."
         )
-    return FileResponse(file_path, media_type="image/png", filename=f"mask_{result_id}.png")
+    return FileResponse(file_path, media_type="image/png", filename=f"mask_{detection_id}.png")
 
 
 @router.get(
-    "/satellite/results/{result_id}/geotiff",
+    "/detect/{detection_id}/geotiff",
     tags=["Landslide Detection"],
     summary="Download Georeferenced Mask GeoTIFF",
-    description="Download the georeferenced segmentation mask as a GeoTIFF raster preserving the original CRS and affine transform."
+    description="Download the georeferenced segmentation mask as a GeoTIFF raster preserving original CRS and affine transform."
 )
-async def get_geotiff_mask(result_id: str):
-    file_path = satellite_service.get_result_file_path(result_id, "geotiff")
+async def get_geotiff_mask(detection_id: str):
+    file_path = satellite_service.get_result_file_path(detection_id, "geotiff")
     if not file_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Georeferenced GeoTIFF for result '{result_id}' not found (input may not have had geospatial metadata)."
+            detail=f"Georeferenced GeoTIFF for detection '{detection_id}' not found (input may not have had geospatial metadata)."
         )
     return FileResponse(
         file_path,
         media_type="image/tiff",
-        filename=f"georeferenced_mask_{result_id}.tif"
+        filename=f"georeferenced_mask_{detection_id}.tif"
     )
+
+
+# ==========================================
+# Legacy / Compatibility Aliases
+# ==========================================
+
+@router.get("/satellite/results/{result_id}", include_in_schema=False)
+async def legacy_get_result(result_id: str):
+    return await get_detection_result(result_id)
+
+@router.get("/satellite/results/{result_id}/overlay", include_in_schema=False)
+async def legacy_get_overlay(result_id: str):
+    return await get_overlay_image(result_id)
+
+@router.get("/satellite/results/{result_id}/original", include_in_schema=False)
+async def legacy_get_original(result_id: str):
+    return await get_original_image(result_id)
+
+@router.get("/satellite/results/{result_id}/mask", include_in_schema=False)
+async def legacy_get_mask(result_id: str):
+    return await get_mask_image(result_id)
+
+@router.get("/satellite/results/{result_id}/geotiff", include_in_schema=False)
+async def legacy_get_geotiff(result_id: str):
+    return await get_geotiff_mask(result_id)

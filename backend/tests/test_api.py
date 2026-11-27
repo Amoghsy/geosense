@@ -66,7 +66,7 @@ def setup_test_fixtures():
         ) as dst:
             dst.write(np.ones((4, 64, 64), dtype=np.float32) * 50)
 
-    # 5. 6-band multispectral satellite GeoTIFF
+    # 5. 6-band multispectral satellite GeoTIFF (128x128)
     sat_path = os.path.join(TESTS_DIR, "sample_satellite_6band.tif")
     if not os.path.exists(sat_path):
         trans_128 = from_bounds(76.5, 31.0, 76.6, 31.1, 128, 128)
@@ -78,26 +78,51 @@ def setup_test_fixtures():
             dst.write(data)
             dst.descriptions = ("BLUE", "GREEN", "RED", "NIR_BROAD", "SWIR_1", "SWIR_2")
 
+    # 6. All-NoData satellite GeoTIFF
+    nodata_path = os.path.join(TESTS_DIR, "sample_all_nodata.tif")
+    if not os.path.exists(nodata_path):
+        trans_64 = from_bounds(76.5, 31.0, 76.6, 31.1, 64, 64)
+        data = np.full((6, 64, 64), np.nan, dtype=np.float32)
+        with rasterio.open(
+            nodata_path, "w", driver="GTiff", height=64, width=64, count=6,
+            dtype=np.float32, crs="EPSG:4326", transform=trans_64, nodata=-9999.0
+        ) as dst:
+            dst.write(data)
 
-def test_health_endpoint():
-    """Verify health check endpoint returns 200 with expected structure."""
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "healthy"
-    assert data["service"] == "GeoSense Satellite Detection API"
+
+def test_ui_endpoints():
+    """Verify HTML test UI is served at / and /ui."""
+    resp_root = client.get("/")
+    assert resp_root.status_code == 200
+    assert "text/html" in resp_root.headers["content-type"]
+    assert "GeoSense" in resp_root.text
+
+    resp_ui = client.get("/ui")
+    assert resp_ui.status_code == 200
+    assert "text/html" in resp_ui.headers["content-type"]
 
 
-def test_model_status_endpoint():
+def test_health_endpoints():
+    """Verify health check endpoint returns 200 at both /health and /api/health."""
+    for path in ["/health", "/api/health"]:
+        response = client.get(path)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["service"] == "GeoSense Satellite Detection API"
+
+
+def test_model_status_endpoints():
     """Verify model status endpoint returns repository, device, and band specifications."""
-    response = client.get("/api/model/status")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["model_repository"] == "srivassid/prithvi-landslide"
-    assert "status" in data
-    assert "device" in data
-    assert "required_bands" in data
-    assert data["required_bands"] == ["BLUE", "GREEN", "RED", "NIR_BROAD", "SWIR_1", "SWIR_2"]
+    for path in ["/model/status", "/api/model/status"]:
+        response = client.get(path)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["model_repository"] == "srivassid/prithvi-landslide"
+        assert "status" in data
+        assert "device" in data
+        assert "required_bands" in data
+        assert data["required_bands"] == ["BLUE", "GREEN", "RED", "NIR_BROAD", "SWIR_1", "SWIR_2"]
 
 
 def test_unsupported_file_extension_rejected():
@@ -105,7 +130,7 @@ def test_unsupported_file_extension_rejected():
     txt_path = os.path.join(TESTS_DIR, "sample_invalid.txt")
     with open(txt_path, "rb") as f:
         response = client.post(
-            "/api/satellite/detect",
+            "/detect",
             files={"file": ("sample_invalid.txt", f, "text/plain")}
         )
     assert response.status_code == 400
@@ -119,7 +144,7 @@ def test_standard_photo_jpg_rejected():
     jpg_path = os.path.join(TESTS_DIR, "sample_photo.jpg")
     with open(jpg_path, "rb") as f:
         response = client.post(
-            "/api/satellite/detect",
+            "/detect",
             files={"file": ("sample_photo.jpg", f, "image/jpeg")}
         )
     assert response.status_code == 400
@@ -133,7 +158,7 @@ def test_3band_rgb_geotiff_rejected():
     rgb_path = os.path.join(TESTS_DIR, "sample_invalid_rgb.tif")
     with open(rgb_path, "rb") as f:
         response = client.post(
-            "/api/satellite/detect",
+            "/detect",
             files={"file": ("sample_invalid_rgb.tif", f, "image/tiff")}
         )
     assert response.status_code == 400
@@ -147,13 +172,27 @@ def test_incorrect_band_count_rejected():
     four_band_path = os.path.join(TESTS_DIR, "sample_invalid_4band.tif")
     with open(four_band_path, "rb") as f:
         response = client.post(
-            "/api/satellite/detect",
+            "/detect",
             files={"file": ("sample_invalid_4band.tif", f, "image/tiff")}
         )
     assert response.status_code == 400
     detail = response.json()["detail"]
     assert detail["success"] is False
     assert "Unsupported number of bands: 4" in detail["message"]
+
+
+def test_all_nodata_rejected():
+    """Verify images containing only NoData/NaN are rejected."""
+    nodata_path = os.path.join(TESTS_DIR, "sample_all_nodata.tif")
+    with open(nodata_path, "rb") as f:
+        response = client.post(
+            "/detect",
+            files={"file": ("sample_all_nodata.tif", f, "image/tiff")}
+        )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["success"] is False
+    assert ("no finite valid pixels" in detail["message"] or "contains no valid data" in detail["message"])
 
 
 def test_preprocessing_6band_satellite_tif():
@@ -167,6 +206,8 @@ def test_preprocessing_6band_satellite_tif():
     assert preprocessed.has_georeference is True
     assert "4326" in str(preprocessed.crs)
     assert preprocessed.transform is not None
+    assert preprocessed.valid_mask is not None
+    assert preprocessed.valid_mask.shape == (128, 128)
 
 
 def test_mask_and_overlay_generation(tmp_path):
@@ -191,58 +232,69 @@ def test_mask_and_overlay_generation(tmp_path):
     assert os.path.isfile(geotiff_path)
 
 
-def test_successful_inference_or_model_status():
+def test_successful_inference_end_to_end():
     """
     Test end-to-end detection pipeline with authentic Landslide4Sense 6-band sample.
-    If the 3.8GB checkpoint is currently loading or downloading, checks graceful handling.
+    Checks endpoints:
+    - POST /detect
+    - GET /detect/{id}
+    - GET /detect/{id}/overlay
+    - GET /detect/{id}/mask
+    - GET /detect/{id}/original
+    - GET /detect/{id}/geotiff
     """
     sample_tif = os.path.join(TESTS_DIR, "sample_satellite_6band.tif")
     assert os.path.exists(sample_tif)
 
     with open(sample_tif, "rb") as f:
         response = client.post(
-            "/api/satellite/detect",
+            "/detect",
             files={"file": ("sample_satellite_6band.tif", f, "image/tiff")}
         )
-
-    manager = get_model_manager()
 
     if response.status_code == 200:
         data = response.json()
         assert data["success"] is True
+        assert data["status"] == "completed"
         assert data["model"] == "srivassid/prithvi-landslide"
-        assert "result_id" in data
+        assert "detection_id" in data
+        assert "timestamp" in data
         assert "detection" in data
         assert "landslide_detected" in data["detection"]
         assert "landslide_pixel_percentage" in data["detection"]
-        assert "total_pixels" in data["detection"]
-        assert data["detection"]["total_pixels"] == 128 * 128
+        assert "total_valid_pixels" in data["detection"]
+        assert "nodata_pixels" in data["detection"]
         assert data["geospatial"]["has_georeference"] is True
         assert "4326" in str(data["geospatial"]["crs"])
 
-        result_id = data["result_id"]
+        detection_id = data["detection_id"]
 
         # Test metadata retrieval
-        meta_resp = client.get(f"/api/satellite/results/{result_id}")
+        meta_resp = client.get(f"/detect/{detection_id}")
         assert meta_resp.status_code == 200
-        assert meta_resp.json()["result_id"] == result_id
+        assert meta_resp.json()["detection_id"] == detection_id
 
         # Test overlay retrieval
-        overlay_resp = client.get(f"/api/satellite/results/{result_id}/overlay")
+        overlay_resp = client.get(f"/detect/{detection_id}/overlay")
         assert overlay_resp.status_code == 200
         assert overlay_resp.headers["content-type"] == "image/png"
 
+        # Test original RGB retrieval
+        orig_resp = client.get(f"/detect/{detection_id}/original")
+        assert orig_resp.status_code == 200
+        assert orig_resp.headers["content-type"] == "image/png"
+
         # Test mask retrieval
-        mask_resp = client.get(f"/api/satellite/results/{result_id}/mask")
+        mask_resp = client.get(f"/detect/{detection_id}/mask")
         assert mask_resp.status_code == 200
         assert mask_resp.headers["content-type"] == "image/png"
 
         # Test GeoTIFF download
-        geotiff_resp = client.get(f"/api/satellite/results/{result_id}/geotiff")
+        geotiff_resp = client.get(f"/detect/{detection_id}/geotiff")
         assert geotiff_resp.status_code == 200
         assert geotiff_resp.headers["content-type"] == "image/tiff"
     else:
-        # If model is downloading or not yet loaded
+        # If model failed to load due to environment constraints
         assert response.status_code == 503
         detail = response.json()["detail"]
         assert detail["success"] is False

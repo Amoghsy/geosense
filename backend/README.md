@@ -15,6 +15,9 @@ AI-powered satellite imagery landslide segmentation backend for GeoSense, utiliz
 - **Decoder:** `UperNetDecoder` with Pyramid Pooling Module (PPM) and Feature Pyramid Network (FPN)
 - **Output Classes:** 2 (0: Non-Landslide / Background, 1: Landslide)
 - **Fine-Tuning Benchmark:** Landslide4Sense multispectral benchmark
+- **Inference Modes:**
+  - Standard single patch (resampled to 224×224 for individual patches).
+  - Tiled sliding-window inference with 2D Hann window blending for large satellite scenes.
 
 ---
 
@@ -55,27 +58,36 @@ Channel-wise z-score normalization `(x - mean) / std` is applied using the exact
 backend/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                     # FastAPI application setup and lifespan
+│   ├── main.py                     # FastAPI application setup, lifespan, and UI serving
 │   ├── api/
 │   │   ├── __init__.py
 │   │   └── satellite_routes.py     # Endpoints for health, status, detection, retrieval
 │   ├── ml/
 │   │   ├── __init__.py
 │   │   ├── model_loader.py         # Hugging Face checkpoint loading and caching
-│   │   ├── preprocessing.py        # Band validation, resizing, normalization
-│   │   ├── inference.py            # Forward pass through Prithvi ViT and UperNet
-│   │   └── postprocessing.py       # Binary masks, RGB previews, colored overlay
+│   │   ├── preprocessing.py        # Band validation, resizing, normalization, NoData masking
+│   │   ├── inference.py            # Forward pass & tiled Hann-window inference
+│   │   └── postprocessing.py       # Binary masks, RGB previews, colored overlay, GeoTIFF
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── satellite_service.py    # Detection orchestration and artifact persistence
+│   │   └── satellite_service.py    # Detection orchestration and structured artifact persistence
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   └── satellite_schema.py     # Pydantic request and response models
+│   ├── static/
+│   │   └── index.html              # Interactive HTML testing web dashboard
 │   └── utils/
 │       ├── __init__.py
 │       └── image_utils.py          # Visual stretches, overlays, GeoTIFF serialization
 ├── uploads/                        # Uploaded satellite files
-├── results/                        # Generated masks, overlays, GeoTIFFs, metadata
+├── results/                        # Generated detection artifacts and per-detection folders
+│   └── detections/
+│       └── {detection_id}/
+│           ├── original.png
+│           ├── mask.png
+│           ├── overlay.png
+│           ├── georeferenced_mask.tif
+│           └── result.json
 ├── model_weights/                  # Cached Prithvi model weights (last.ckpt)
 ├── tests/                          # Automated test suite and sample GeoTIFF fixtures
 │   ├── __init__.py
@@ -95,7 +107,7 @@ backend/
 - Python 3.11 or 3.12 (64-bit)
 - PowerShell 5.1+ or PowerShell Core
 
-### Step 1: Clone or Navigate to the Backend Folder
+### Step 1: Navigate to the Backend Folder
 ```powershell
 cd d:\mywork\PBL\geosense\backend
 ```
@@ -119,40 +131,47 @@ pip install -r requirements.txt
 
 ---
 
-## 5. Model Download & Weights Setup
+## 5. Model Weights Setup
 
 The model checkpoint `last.ckpt` (~3.78 GB) is hosted on Hugging Face at `srivassid/prithvi-landslide`.
 
-### Automatic Download:
-The backend automatically downloads and caches `last.ckpt` into `backend/model_weights/` on startup or on the first detection request.
-
-### Manual Download (Optional):
-You can pre-download the checkpoint using `huggingface_hub`:
-```powershell
-python -c "from huggingface_hub import hf_hub_download; hf_hub_download('srivassid/prithvi-landslide', 'last.ckpt', local_dir='model_weights')"
-```
+The backend automatically loads and caches `last.ckpt` into `backend/model_weights/`. It uses a singleton `ModelManager` initialized on startup, auto-detecting CUDA if a GPU is available or falling back to CPU.
 
 ---
 
-## 6. Running the FastAPI Server
+## 6. Running the Backend & Web Testing Dashboard
 
 Start the server using `uvicorn`:
 ```powershell
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-The server will be available at:
-- **Base URL:** `http://localhost:8000`
-- **Interactive Swagger UI:** `http://localhost:8000/docs`
+The server provides:
+- **Interactive Testing Web UI:** `http://localhost:8000/` or `http://localhost:8000/ui`
+- **Interactive Swagger Docs:** `http://localhost:8000/docs`
 - **ReDoc:** `http://localhost:8000/redoc`
 
 ---
 
-## 7. API Endpoints Reference
+## 7. Interactive Web Testing Interface (`/` & `/ui`)
+
+The backend includes a built-in dark-themed web dashboard for testing:
+- **Live Model Status:** Shows real-time Prithvi ViT readiness and compute device (CPU/CUDA).
+- **Drag-and-Drop Ingestion:** Supports `.tif`, `.tiff`, and `.h5` files.
+- **Validation Alerts:** Immediate clear feedback on invalid formats or missing bands.
+- **Visual Switcher:** Side-by-side or tabbed inspection of True-Color RGB satellite composite, Binary Segmentation Mask, and Colored Overlay.
+- **Statistical Dashboard:** Displays Detection Status (DETECTED / CLEAR), Landslide Coverage %, Valid Pixels, Latency, CRS, and Dimensions.
+- **Direct Downloads:** One-click download of binary mask PNG, overlay PNG, georeferenced GeoTIFF, and metadata JSON.
+
+---
+
+## 8. API Endpoints Reference
+
+All endpoints are accessible directly and via the `/api` prefix for backward compatibility.
 
 ### 1. Health Check
 - **Method:** `GET`
-- **URL:** `/api/health`
+- **URL:** `/health` (or `/api/health`)
 - **Response:**
 ```json
 {
@@ -163,7 +182,7 @@ The server will be available at:
 
 ### 2. Model Status
 - **Method:** `GET`
-- **URL:** `/api/model/status`
+- **URL:** `/model/status` (or `/api/model/status`)
 - **Response:**
 ```json
 {
@@ -181,7 +200,7 @@ The server will be available at:
 
 ### 3. Landslide Detection
 - **Method:** `POST`
-- **URL:** `/api/satellite/detect`
+- **URL:** `/detect` (or `/api/satellite/detect`)
 - **Content-Type:** `multipart/form-data`
 - **Field:** `file` (Upload a 6-band or 14-band GeoTIFF or HDF5)
 - **Response:**
@@ -189,11 +208,18 @@ The server will be available at:
 {
   "success": true,
   "result_id": "a1b2c3d4e5f6",
+  "detection_id": "a1b2c3d4e5f6",
+  "status": "completed",
   "model": "srivassid/prithvi-landslide",
+  "model_version": "main",
+  "timestamp": "2026-11-27T06:58:30.123456+00:00",
   "detection": {
     "landslide_detected": true,
     "landslide_pixel_percentage": 4.82,
+    "detected_area_percentage": 4.82,
     "total_pixels": 16384,
+    "total_valid_pixels": 16384,
+    "nodata_pixels": 0,
     "landslide_pixels": 790
   },
   "geospatial": {
@@ -205,46 +231,46 @@ The server will be available at:
       "right": 76.6,
       "top": 31.1
     },
-    "affine_transform": [0.00078125, 0.0, 76.5, 0.0, -0.00078125, 31.1]
+    "affine_transform": [0.00078125, 0.0, 76.5, 0.0, -0.00078125, 31.1],
+    "image_dimensions": {
+      "width": 128,
+      "height": 128
+    }
   },
   "files": {
-    "original_image": "/api/satellite/results/a1b2c3d4e5f6/original",
-    "segmentation_mask": "/api/satellite/results/a1b2c3d4e5f6/mask",
-    "overlay": "/api/satellite/results/a1b2c3d4e5f6/overlay",
-    "georeferenced_mask_tif": "/api/satellite/results/a1b2c3d4e5f6/geotiff"
+    "original_image": "/detect/a1b2c3d4e5f6/original",
+    "segmentation_mask": "/detect/a1b2c3d4e5f6/mask",
+    "overlay": "/detect/a1b2c3d4e5f6/overlay",
+    "georeferenced_mask_tif": "/detect/a1b2c3d4e5f6/geotiff",
+    "result_json": "/detect/a1b2c3d4e5f6"
   },
-  "processing_time_seconds": 1.842
+  "processing_time_seconds": 0.742
 }
 ```
 
-### 4. Retrieve Analysis Metadata
+### 4. Retrieve Detection Result Metadata
 - **Method:** `GET`
-- **URL:** `/api/satellite/results/{result_id}`
+- **URL:** `/detect/{detection_id}` (or `/api/satellite/results/{result_id}`)
 
-### 5. Retrieve Overlay Image
+### 5. Retrieve Colored Overlay Image
 - **Method:** `GET`
-- **URL:** `/api/satellite/results/{result_id}/overlay`
+- **URL:** `/detect/{detection_id}/overlay` (or `/api/satellite/results/{result_id}/overlay`)
 - **Content-Type:** `image/png`
 
-### 6. Download Georeferenced GeoTIFF Mask
+### 6. Retrieve True-Color RGB Original Image
 - **Method:** `GET`
-- **URL:** `/api/satellite/results/{result_id}/geotiff`
+- **URL:** `/detect/{detection_id}/original` (or `/api/satellite/results/{result_id}/original`)
+- **Content-Type:** `image/png`
+
+### 7. Retrieve Binary Segmentation Mask
+- **Method:** `GET`
+- **URL:** `/detect/{detection_id}/mask` (or `/api/satellite/results/{result_id}/mask`)
+- **Content-Type:** `image/png`
+
+### 8. Download Georeferenced GeoTIFF Mask
+- **Method:** `GET`
+- **URL:** `/detect/{detection_id}/geotiff` (or `/api/satellite/results/{result_id}/geotiff`)
 - **Content-Type:** `image/tiff`
-
----
-
-## 8. Testing with Swagger UI
-
-1. Open your browser and navigate to:
-   ```
-   http://localhost:8000/docs
-   ```
-2. Locate `POST /api/satellite/detect`.
-3. Click **"Try it out"**.
-4. In the `file` parameter, upload `backend/tests/sample_satellite_6band.tif`.
-5. Click **"Execute"**.
-6. View the structured JSON detection response with landslide percentage, pixel counts, and file links.
-7. Open the returned `/api/satellite/results/{result_id}/overlay` URL to view the visualized landslide detection mask overlay!
 
 ---
 
@@ -252,18 +278,20 @@ The server will be available at:
 
 Run pytest in PowerShell:
 ```powershell
-pytest -v tests/test_api.py
+python -m pytest backend/tests/test_api.py -v
 ```
 
 The test suite validates:
+- Interactive HTML test UI serving at `/` and `/ui`
 - API health and model status endpoints
 - Rejection of non-satellite text files
 - Rejection of consumer mobile JPEG photographs
 - Rejection of standard 3-band RGB imagery
 - Rejection of incorrect band counts
+- Rejection of empty/all-NoData rasters
 - Multispectral preprocessing and normalization
-- Mask and overlay visual rendering
-- Full inference and result retrieval
+- Mask, overlay, and GeoTIFF visual rendering
+- Full inference and structured artifact retrieval
 
 ---
 
@@ -273,6 +301,7 @@ The test suite validates:
 |:---|:---|:---|
 | `Standard 3-band RGB photograph detected` | Uploaded a standard 3-channel RGB image. | The Prithvi model strictly requires 6 satellite bands (`B2, B3, B4, B8, B11, B12`). Upload a multispectral GeoTIFF. |
 | `Unsupported number of bands: X` | Uploaded a GeoTIFF with band count not equal to 6 or 14. | Provide a 6-band Sentinel-2 tile or 14-band Landslide4Sense raster. |
-| `Prithvi Model Unavailable` | Checkpoint is currently downloading or cannot be accessed. | Check `/api/model/status` to monitor download progress or verify network access to Hugging Face. |
+| `Satellite image contains no valid data` | Uploaded raster is entirely NoData or NaN values. | Provide satellite imagery with valid reflectance values. |
+| `Prithvi Model Unavailable` | Checkpoint is currently loading or cannot be accessed. | Check `/model/status` to monitor loading status. |
 | `CUDA out of memory` | GPU memory exhausted during inference. | Set `DEVICE=cpu` in `.env` to execute inference on host CPU. |
 | `RasterioIOError` | Uploaded file is corrupted or not a valid raster. | Ensure the file was completely uploaded and is a valid GeoTIFF format. |

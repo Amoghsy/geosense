@@ -33,6 +33,9 @@ class DetectionStats(BaseModel):
     landslide_pixel_percentage: float = Field(..., description="Percentage of valid pixels classified as landslide")
     total_pixels: int = Field(..., description="Total count of valid pixels evaluated")
     landslide_pixels: int = Field(..., description="Count of pixels classified as landslide")
+    total_valid_pixels: Optional[int] = Field(None, description="Count of valid non-NoData pixels")
+    nodata_pixels: Optional[int] = Field(0, description="Count of invalid or NoData pixels excluded from analysis")
+    detected_area_percentage: Optional[float] = Field(None, description="Synonym for landslide_pixel_percentage")
 
 
 class GeospatialMetadata(BaseModel):
@@ -40,6 +43,7 @@ class GeospatialMetadata(BaseModel):
     crs: Optional[str] = Field(None, description="Coordinate Reference System (e.g. EPSG:4326)")
     bounds: Optional[Dict[str, float]] = Field(None, description="Bounding coordinates [left, bottom, right, top]")
     affine_transform: Optional[List[float]] = Field(None, description="Affine transform coefficients")
+    image_dimensions: Optional[Dict[str, int]] = Field(None, description="Width and height of input raster in pixels")
 
 
 class DetectionFiles(BaseModel):
@@ -49,12 +53,17 @@ class DetectionFiles(BaseModel):
     georeferenced_mask_tif: Optional[str] = Field(
         None, description="URL path to downloadable georeferenced GeoTIFF segmentation mask"
     )
+    result_json: Optional[str] = Field(None, description="URL path to raw detection result JSON")
 
 
 class DetectionResponse(BaseModel):
     success: bool = Field(..., description="Whether detection completed successfully")
     result_id: str = Field(..., description="Unique identifier for the analysis result")
+    detection_id: Optional[str] = Field(None, description="Synonym for result_id")
+    status: str = Field("completed", description="Processing status: 'completed' or 'failed'")
     model: str = Field(..., description="Model used for inference")
+    model_version: Optional[str] = Field("main", description="Model revision or commit")
+    timestamp: Optional[str] = Field(None, description="ISO-8601 processing completion timestamp")
     detection: DetectionStats = Field(..., description="Statistical detection results")
     geospatial: GeospatialMetadata = Field(..., description="Geospatial metadata extracted from satellite input")
     files: DetectionFiles = Field(..., description="Generated result file routes")

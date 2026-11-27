@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoSense — Satellite Landslide Detection Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-subtle: #182234;
+      --border-color: #334155;
+      --border-hover: #475569;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-red: #ef4444;
+      --accent-red-glow: rgba(239, 68, 68, 0.25);
+      --accent-green: #10b981;
+      --accent-green-glow: rgba(16, 185, 129, 0.25);
+      --accent-blue: #38bdf8;
+      --accent-blue-glow: rgba(56, 189, 248, 0.25);
+      --accent-amber: #f59e0b;
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    header {
+      background-color: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #ef4444, #f97316);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.2rem;
+      box-shadow: 0 0 15px var(--accent-red-glow);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .model-badge-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.825rem;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--accent-amber);
+      box-shadow: 0 0 8px var(--accent-amber);
+      transition: all 0.3s ease;
+    }
+
+    .status-dot.ready {
+      background-color: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green-glow);
+    }
+
+    .status-dot.error {
+      background-color: var(--accent-red);
+      box-shadow: 0 0 8px var(--accent-red-glow);
+    }
+
+    .banner {
+      background: rgba(30, 41, 59, 0.6);
+      border-bottom: 1px solid var(--border-color);
+      padding: 0.6rem 2rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      text-align: center;
+    }
+
+    .banner strong {
+      color: var(--accent-amber);
+    }
+
+    main {
+      flex: 1;
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 980px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .panel-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-main);
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: 10px;
+      padding: 2rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--bg-card-subtle);
+      position: relative;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .dropzone-icon {
+      font-size: 2.2rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-muted);
+    }
+
+    .dropzone-text {
+      font-size: 0.9rem;
+      color: var(--text-main);
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .dropzone-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    #file-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .file-details {
+      display: none;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+    }
+
+    .file-details.visible {
+      display: block;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+      border: none;
+      padding: 0.85rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px var(--accent-red-glow);
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px var(--accent-red-glow);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      box-shadow: none;
+      font-size: 0.825rem;
+      padding: 0.5rem 0.85rem;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--border-color);
+      box-shadow: none;
+    }
+
+    .alert {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      display: none;
+      border: 1px solid transparent;
+    }
+
+    .alert.visible {
+      display: block;
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .alert-info {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: rgba(56, 189, 248, 0.3);
+      color: #7dd3fc;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Results section */
+    .results-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      color: var(--text-muted);
+      border: 2px dashed var(--border-color);
+      border-radius: 12px;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .results-empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .results-view {
+      display: none;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .results-view.visible {
+      display: flex;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .metric-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .metric-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+    }
+
+    .metric-value.hazard {
+      color: var(--accent-red);
+    }
+
+    .metric-value.clear {
+      color: var(--accent-green);
+    }
+
+    .preview-tabs {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.75rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    .viewer-container {
+      background: #000;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 380px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .viewer-img {
+      max-width: 100%;
+      max-height: 520px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .slider-box {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .slider-box input[type="range"] {
+      flex: 1;
+      cursor: pointer;
+    }
+
+    .downloads-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .dl-btn {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .dl-btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    pre.code-json {
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      padding: 1rem;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #a5f3fc;
+      overflow-x: auto;
+      max-height: 250px;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 1.5rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-logo">GS</div>
+      <div>
+        <div class="brand-title">GeoSense</div>
+        <div class="brand-subtitle">Phase 1: Satellite Landslide Detection</div>
+      </div>
+    </div>
+
+    <div class="model-badge-container">
+      <div id="status-dot" class="status-dot"></div>
+      <span id="model-status-text">Checking Prithvi ViT...</span>
+    </div>
+  </header>
+
+  <div class="banner">
+    <span>⚠️ <strong>Phase 1 Scope:</strong> Detects currently visible landslides in Sentinel-2 multispectral imagery. Not a predictive hazard forecasting tool.</span>
+  </div>
+
+  <main>
+    <!-- Left Panel: Input & Control -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>🛰️</span> Satellite Input
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="file-input" accept=".tif,.tiff,.h5,.hdf5" />
+        <div class="dropzone-icon">📁</div>
+        <div class="dropzone-text">Click to choose or drag & drop</div>
+        <div class="dropzone-hint">Supported: GeoTIFF (.tif) or HDF5 (.h5)<br>Requires 6 bands (B2, B3, B4, B8, B11, B12)</div>
+      </div>
+
+      <div class="file-details" id="file-details">
+        <div style="font-weight:600; color:var(--text-main);" id="filename-display">-</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);" id="filesize-display">-</div>
+      </div>
+
+      <button id="detect-btn" class="btn" disabled>
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-text">Run Landslide Detection</span>
+      </button>
+
+      <div id="alert-box" class="alert alert-error"></div>
+
+      <div style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">QUICK INFO</div>
+        <ul style="font-size: 0.75rem; color: var(--text-muted); padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem;">
+          <li>Model: IBM/NASA Prithvi-EO-2.0-300M (ViT)</li>
+          <li>Weights: Fine-tuned on Landslide4Sense</li>
+          <li>Resolution: 224x224 patch / sliding window</li>
+          <li>Consumer photos (RGB JPEG/PNG) are strictly rejected.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Right Panel: Results & Visual Analytics -->
+    <div class="panel" style="gap: 1.5rem;">
+      <div class="panel-title">
+        <span>📊</span> Detection Results & Visual Analytics
+      </div>
+
+      <!-- Placeholder before run -->
+      <div id="results-empty" class="results-empty">
+        <div class="results-empty-icon">🗺️</div>
+        <h3>No Satellite Image Processed Yet</h3>
+        <p style="font-size: 0.85rem; max-width: 360px; margin-top: 0.5rem;">
+          Select a multi-band GeoTIFF or HDF5 satellite image on the left and run inference to inspect detected landslides.
+        </p>
+      </div>
+
+      <!-- Results view -->
+      <div id="results-view" class="results-view">
+        <!-- Top Metrics Cards -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-label">Detection Status</span>
+            <span id="metric-status" class="metric-value">-</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Landslide Coverage</span>
+            <span id="metric-percentage" class="metric-value">-</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Landslide Pixels</span>
+            <span id="metric-pixels" class="metric-value">-</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Latency</span>
+            <span id="metric-time" class="metric-value">-</span>
+          </div>
+        </div>
+
+        <!-- Geospatial & Scene info -->
+        <div style="background:var(--bg-card-subtle); border:1px solid var(--border-color); border-radius:8px; padding:0.85rem 1rem; font-size:0.8rem; display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+          <div><strong style="color:var(--text-muted)">CRS:</strong> <span id="info-crs" style="font-family:var(--font-mono)">-</span></div>
+          <div><strong style="color:var(--text-muted)">Dimensions:</strong> <span id="info-dim" style="font-family:var(--font-mono)">-</span></div>
+          <div><strong style="color:var(--text-muted)">Detection ID:</strong> <span id="info-id" style="font-family:var(--font-mono)">-</span></div>
+        </div>
+
+        <!-- Visual Switcher -->
+        <div class="preview-tabs">
+          <button class="tab-btn active" data-tab="overlay">Overlay Preview</button>
+          <button class="tab-btn" data-tab="original">True-Color RGB</button>
+          <button class="tab-btn" data-tab="mask">Binary Mask</button>
+          <button class="tab-btn" data-tab="json">Raw JSON</button>
+        </div>
+
+        <div id="viewer-box" class="viewer-container">
+          <img id="viewer-img" class="viewer-img" alt="Visual Preview" />
+          <pre id="json-viewer" class="code-json" style="display:none; width:100%; height:100%; margin:0; border:none;"></pre>
+        </div>
+
+        <!-- Downloads -->
+        <div class="downloads-row">
+          <a id="dl-mask" class="dl-btn" href="#" download>⬇️ Binary Mask (PNG)</a>
+          <a id="dl-overlay" class="dl-btn" href="#" download>⬇️ Overlay (PNG)</a>
+          <a id="dl-geotiff" class="dl-btn" href="#" download style="display:none;">⬇️ GeoTIFF (CRS Raster)</a>
+          <a id="dl-json" class="dl-btn" href="#" download>⬇️ Metadata (JSON)</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    GeoSense Phase 1 — Satellite-Based Landslide Detection • Powered by IBM/NASA Prithvi ViT & TerraTorch • North-Eastern India
+  </footer>
+
+  <script>
+    const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+    const fileDetails = document.getElementById('file-details');
+    const filenameDisplay = document.getElementById('filename-display');
+    const filesizeDisplay = document.getElementById('filesize-display');
+    const detectBtn = document.getElementById('detect-btn');
+    const btnText = document.getElementById('btn-text');
+    const spinner = document.getElementById('spinner');
+    const alertBox = document.getElementById('alert-box');
+    const statusDot = document.getElementById('status-dot');
+    const modelStatusText = document.getElementById('model-status-text');
+
+    const resultsEmpty = document.getElementById('results-empty');
+    const resultsView = document.getElementById('results-view');
+    const metricStatus = document.getElementById('metric-status');
+    const metricPercentage = document.getElementById('metric-percentage');
+    const metricPixels = document.getElementById('metric-pixels');
+    const metricTime = document.getElementById('metric-time');
+    const infoCrs = document.getElementById('info-crs');
+    const infoDim = document.getElementById('info-dim');
+    const infoId = document.getElementById('info-id');
+
+    const viewerImg = document.getElementById('viewer-img');
+    const jsonViewer = document.getElementById('json-viewer');
+    const tabBtns = document.querySelectorAll('.tab-btn');
+
+    const dlMask = document.getElementById('dl-mask');
+    const dlOverlay = document.getElementById('dl-overlay');
+    const dlGeotiff = document.getElementById('dl-geotiff');
+    const dlJson = document.getElementById('dl-json');
+
+    let currentResult = null;
+    let selectedFile = null;
+
+    // Check model status on page load
+    async function checkModelStatus() {
+      try {
+        const res = await fetch('/model/status');
+        if (!res.ok) throw new Error('Model status endpoint unavailable');
+        const data = await res.json();
+        if (data.status === 'ready' || data.status === 'loaded') {
+          statusDot.className = 'status-dot ready';
+          modelStatusText.textContent = `Prithvi ViT Ready (${data.device.toUpperCase()})`;
+        } else {
+          statusDot.className = 'status-dot';
+          modelStatusText.textContent = `Model Status: ${data.status}`;
+        }
+      } catch (err) {
+        statusDot.className = 'status-dot error';
+        modelStatusText.textContent = 'Model Service Offline';
+      }
+    }
+
+    checkModelStatus();
+
+    // File selection
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleFileSelect(e.target.files[0]);
+      }
+    });
+
+    ['dragenter', 'dragover'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+      dropzone.addEventListener(name, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFileSelect(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleFileSelect(file) {
+      selectedFile = file;
+      filenameDisplay.textContent = file.name;
+      filesizeDisplay.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+      fileDetails.classList.add('visible');
+      detectBtn.disabled = false;
+      hideAlert();
+    }
+
+    function showAlert(msg, isError = true) {
+      alertBox.textContent = msg;
+      alertBox.className = isError ? 'alert alert-error visible' : 'alert alert-info visible';
+    }
+
+    function hideAlert() {
+      alertBox.className = 'alert';
+    }
+
+    // Detection execution
+    detectBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      detectBtn.disabled = true;
+      spinner.style.display = 'block';
+      btnText.textContent = 'Detecting Landslides...';
+      hideAlert();
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      try {
+        const res = await fetch('/detect', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          const errMsg = data.detail?.message || data.detail || 'Inference failed.';
+          throw new Error(errMsg);
+        }
+
+        renderResults(data);
+      } catch (err) {
+        showAlert(err.message || 'Detection failed. Please verify satellite input format.');
+      } finally {
+        detectBtn.disabled = false;
+        spinner.style.display = 'none';
+        btnText.textContent = 'Run Landslide Detection';
+      }
+    });
+
+    function renderResults(data) {
+      currentResult = data;
+      resultsEmpty.style.display = 'none';
+      resultsView.classList.add('visible');
+
+      const isDetected = data.detection.landslide_detected;
+      metricStatus.textContent = isDetected ? 'DETECTED' : 'CLEAR';
+      metricStatus.className = isDetected ? 'metric-value hazard' : 'metric-value clear';
+
+      metricPercentage.textContent = `${data.detection.landslide_pixel_percentage.toFixed(2)}%`;
+      metricPixels.textContent = `${data.detection.landslide_pixels.toLocaleString()} / ${data.detection.total_valid_pixels ? data.detection.total_valid_pixels.toLocaleString() : data.detection.total_pixels.toLocaleString()}`;
+      metricTime.textContent = `${data.processing_time_seconds}s`;
+
+      infoCrs.textContent = data.geospatial.crs || 'Non-georeferenced';
+      if (data.geospatial.image_dimensions) {
+        infoDim.textContent = `${data.geospatial.image_dimensions.width} × ${data.geospatial.image_dimensions.height} px`;
+      } else {
+        infoDim.textContent = '224 × 224 px';
+      }
+      infoId.textContent = data.detection_id || data.result_id;
+
+      // Set download links
+      dlMask.href = data.files.segmentation_mask;
+      dlOverlay.href = data.files.overlay;
+      dlJson.href = `/detect/${data.detection_id || data.result_id}`;
+      dlJson.download = `result_${data.detection_id || data.result_id}.json`;
+
+      if (data.files.georeferenced_mask_tif) {
+        dlGeotiff.href = data.files.georeferenced_mask_tif;
+        dlGeotiff.style.display = 'inline-flex';
+      } else {
+        dlGeotiff.style.display = 'none';
+      }
+
+      // Default tab to overlay
+      switchTab('overlay');
+    }
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        switchTab(btn.dataset.tab);
+      });
+    });
+
+    function switchTab(tab) {
+      if (!currentResult) return;
+
+      if (tab === 'json') {
+        viewerImg.style.display = 'none';
+        jsonViewer.style.display = 'block';
+        jsonViewer.textContent = JSON.stringify(currentResult, null, 2);
+      } else {
+        jsonViewer.style.display = 'none';
+        viewerImg.style.display = 'block';
+
+        if (tab === 'overlay') {
+          viewerImg.src = currentResult.files.overlay;
+        } else if (tab === 'original') {
+          viewerImg.src = currentResult.files.original_image;
+        } else if (tab === 'mask') {
+          viewerImg.src = currentResult.files.segmentation_mask;
+        }
+      }
+    }
+  </script>
+</body>
+</html>

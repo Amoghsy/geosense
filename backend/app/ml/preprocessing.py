@@ -49,30 +49,37 @@ class PreprocessedData:
         self,
         tensor: torch.Tensor,
         raw_bands_chw: np.ndarray,
+        normalized_full_chw: np.ndarray,
+        valid_mask: np.ndarray,
         original_shape: Tuple[int, int],
         has_georeference: bool,
         crs: Optional[str] = None,
         transform: Optional[Affine] = None,
-        bounds: Optional[Dict[str, float]] = None
+        bounds: Optional[Dict[str, float]] = None,
+        nodata_val: Optional[float] = None
     ):
-        self.tensor = tensor  # Shape: (1, 6, 224, 224)
+        self.tensor = tensor  # Resized tensor: (1, 6, 224, 224)
         self.raw_bands_chw = raw_bands_chw  # Shape: (6, H, W)
+        self.normalized_full_chw = normalized_full_chw  # Shape: (6, H, W)
+        self.valid_mask = valid_mask  # Shape: (H, W) boolean
         self.original_shape = original_shape  # (H, W)
         self.has_georeference = has_georeference
         self.crs = crs
         self.transform = transform
         self.bounds = bounds
+        self.nodata_val = nodata_val
 
 
-def read_geotiff(file_path: str) -> Tuple[np.ndarray, bool, Optional[str], Optional[Affine], Optional[Dict[str, float]]]:
+def read_geotiff(file_path: str) -> Tuple[np.ndarray, np.ndarray, bool, Optional[str], Optional[Affine], Optional[Dict[str, float]], Optional[float]]:
     """
-    Read satellite GeoTIFF file, extracting multi-band raster and geospatial metadata.
+    Read satellite GeoTIFF file, extracting multi-band raster, valid data mask, and geospatial metadata.
     """
     try:
         with rasterio.open(file_path) as src:
             band_count = src.count
             height = src.height
             width = src.width
+            nodata_val = src.nodata
 
             if band_count == 3:
                 raise SatelliteValidationError(
@@ -94,6 +101,24 @@ def read_geotiff(file_path: str) -> Tuple[np.ndarray, bool, Optional[str], Optio
                 indices = [1, 2, 3, 7, 10, 11]
                 data = data[indices, :, :]
 
+            # Compute valid pixel mask (exclude NoData, NaNs, and Infs)
+            valid_mask = np.ones((height, width), dtype=bool)
+            for b in range(data.shape[0]):
+                finite_b = np.isfinite(data[b])
+                valid_mask &= finite_b
+                if nodata_val is not None and not np.isnan(nodata_val):
+                    valid_mask &= (data[b] != nodata_val)
+
+            # Check if any band has completely empty or invalid data
+            for idx, band_name in enumerate(PRITHVI_BANDS):
+                if not np.any(np.isfinite(data[idx])):
+                    raise SatelliteValidationError(
+                        f"Missing spectral data: Band {band_name} (index {idx}) contains no finite valid pixels."
+                    )
+
+            if not np.any(valid_mask):
+                raise SatelliteValidationError("Uploaded satellite image contains only NoData or empty pixels.")
+
             has_georef = bool(src.crs is not None and src.transform is not None)
             crs_str = str(src.crs) if src.crs else None
             transform = src.transform if has_georef else None
@@ -106,13 +131,13 @@ def read_geotiff(file_path: str) -> Tuple[np.ndarray, bool, Optional[str], Optio
                     "top": float(src.bounds.top),
                 }
 
-            return data.astype(np.float32), has_georef, crs_str, transform, bounds
+            return data.astype(np.float32), valid_mask, has_georef, crs_str, transform, bounds, nodata_val
 
     except rasterio.RasterioIOError as e:
         raise SatelliteValidationError(f"Invalid or corrupted GeoTIFF file: {str(e)}")
 
 
-def read_hdf5(file_path: str) -> Tuple[np.ndarray, bool, Optional[str], Optional[Affine], Optional[Dict[str, float]]]:
+def read_hdf5(file_path: str) -> Tuple[np.ndarray, np.ndarray, bool, Optional[str], Optional[Affine], Optional[Dict[str, float]], Optional[float]]:
     """
     Read satellite HDF5 file (Landslide4Sense benchmark format).
     """
@@ -131,7 +156,6 @@ def read_hdf5(file_path: str) -> Tuple[np.ndarray, bool, Optional[str], Optional
 
             channels = img.shape[-1]
             if channels == 14:
-                # Select Landslide4Sense bands
                 indices = [1, 2, 3, 7, 10, 11]
                 selected = img[..., indices]
             elif channels == 6:
@@ -147,13 +171,16 @@ def read_hdf5(file_path: str) -> Tuple[np.ndarray, bool, Optional[str], Optional
 
             # Move channel to first dimension: (C, H, W)
             chw = np.moveaxis(selected, -1, 0).astype(np.float32)
-            # HDF5 typically does not carry CRS unless stored in attributes
-            has_georef = False
-            crs_str = None
-            transform = None
-            bounds = None
+            h, w = chw.shape[1], chw.shape[2]
 
-            return chw, has_georef, crs_str, transform, bounds
+            valid_mask = np.ones((h, w), dtype=bool)
+            for b in range(chw.shape[0]):
+                valid_mask &= np.isfinite(chw[b])
+
+            if not np.any(valid_mask):
+                raise SatelliteValidationError("Uploaded HDF5 dataset contains only NoData or empty pixels.")
+
+            return chw, valid_mask, False, None, None, None, None
 
     except Exception as e:
         if isinstance(e, SatelliteValidationError):
@@ -190,15 +217,15 @@ def resize_multispectral_chw(bands_chw: np.ndarray, target_h: int = TARGET_HEIGH
 
 def preprocess_satellite_image(file_path: str) -> PreprocessedData:
     """
-    Validate, load, normalize, and resize an uploaded satellite image for Prithvi inference.
+    Validate, load, normalize, and prepare an uploaded satellite image for Prithvi inference.
     Rejects ordinary photos and unsupported file types.
     """
     ext = os.path.splitext(file_path)[1].lower()
 
     if ext in [".tif", ".tiff"]:
-        raw_bands_chw, has_georef, crs_str, transform, bounds = read_geotiff(file_path)
+        raw_bands_chw, valid_mask, has_georef, crs_str, transform, bounds, nodata_val = read_geotiff(file_path)
     elif ext in [".h5", ".hdf5"]:
-        raw_bands_chw, has_georef, crs_str, transform, bounds = read_hdf5(file_path)
+        raw_bands_chw, valid_mask, has_georef, crs_str, transform, bounds, nodata_val = read_hdf5(file_path)
     elif ext in [".jpg", ".jpeg", ".png", ".bmp", ".webp"]:
         raise SatelliteValidationError(
             f"Unsupported file format '{ext}'. Standard photographic images (JPEG/PNG) cannot provide "
@@ -211,7 +238,7 @@ def preprocess_satellite_image(file_path: str) -> PreprocessedData:
             "satellite files are supported."
         )
 
-    # Validate shape and finite numbers
+    # Validate shape
     if raw_bands_chw.ndim != 3 or raw_bands_chw.shape[0] != 6:
         raise SatelliteValidationError(f"Expected 6 bands, got shape {raw_bands_chw.shape}")
 
@@ -219,24 +246,27 @@ def preprocess_satellite_image(file_path: str) -> PreprocessedData:
     if orig_h < 16 or orig_w < 16:
         raise SatelliteValidationError(f"Image dimensions too small ({orig_h}x{orig_w}). Minimum size is 16x16.")
 
-    # Replace NaNs or Infs if any with 0.0
-    raw_bands_chw = np.nan_to_num(raw_bands_chw, nan=0.0, posinf=0.0, neginf=0.0)
+    # Replace NaNs or Infs if any with 0.0 for clean normalization
+    clean_bands_chw = np.nan_to_num(raw_bands_chw, nan=0.0, posinf=0.0, neginf=0.0)
 
     # Normalize bands with documented constants
-    normalized_chw = normalize_bands(raw_bands_chw)
+    normalized_full_chw = normalize_bands(clean_bands_chw)
 
-    # Resize to model input dimensions (224, 224)
-    resized_normed = resize_multispectral_chw(normalized_chw, TARGET_HEIGHT, TARGET_WIDTH)
+    # Resize to model input dimensions (224, 224) for single-patch inference
+    resized_normed = resize_multispectral_chw(normalized_full_chw, TARGET_HEIGHT, TARGET_WIDTH)
 
     # Convert to PyTorch Tensor with batch dimension (1, 6, 224, 224)
     tensor = torch.from_numpy(resized_normed).unsqueeze(0).float()
 
     return PreprocessedData(
         tensor=tensor,
-        raw_bands_chw=raw_bands_chw,
+        raw_bands_chw=clean_bands_chw,
+        normalized_full_chw=normalized_full_chw,
+        valid_mask=valid_mask,
         original_shape=(orig_h, orig_w),
         has_georeference=has_georef,
         crs=crs_str,
         transform=transform,
-        bounds=bounds
+        bounds=bounds,
+        nodata_val=nodata_val
     )
