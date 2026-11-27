@@ -13,7 +13,7 @@ import { HeaderBar } from '@/components/HeaderBar';
 import { useApp } from '@/context/AppContext';
 
 export function ReportIncidentStep2Screen() {
-  const { navigate, incidentDraft, updateIncidentDraft } = useApp();
+  const { navigate, incidentDraft, updateIncidentDraft, submitIncidentToBackend } = useApp();
   const [severity, setSeverity] = useState<'Low' | 'Moderate' | 'High' | 'Critical'>('High');
   const [roadAccessibility, setRoadAccessibility] = useState('Partially blocked');
   const [peopleAffected, setPeopleAffected] = useState('Not known');
@@ -25,12 +25,13 @@ export function ReportIncidentStep2Screen() {
     'Critical',
   ];
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     updateIncidentDraft({
       severity,
       accessibility: roadAccessibility,
       peopleAffected,
     });
+    await submitIncidentToBackend();
     navigate('report-incident-success');
   };
 

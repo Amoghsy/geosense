@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoSense Phase 8 — Disaster Management Authority Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a; --card: #1e293b; --subtle: #182234; --border: #334155;
+      --text: #f8fafc; --muted: #94a3b8; --blue: #38bdf8;
+      --green: #10b981; --amber: #f59e0b; --red: #ef4444;
+      --mono: 'JetBrains Mono', monospace; --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: rgba(15,23,42,0.95); border-bottom: 1px solid var(--border); padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+    nav { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 6px; border: 1px solid var(--border); }
+    nav a.active { background: var(--blue); color: #0f172a; border-color: var(--blue); font-weight: 600; }
+    main { max-width: 1400px; width: 100%; margin: 0 auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem; display: flex; flex-direction: column; gap: 0.85rem; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
+    .scard { background: var(--subtle); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; }
+    .scard .val { font-size: 1.35rem; font-weight: 700; font-family: var(--mono); }
+    .scard .lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+    input, select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.82rem; }
+    .btn { background: var(--blue); color: #0f172a; border: none; padding: 0.5rem 0.9rem; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+    #map { height: 320px; border-radius: 8px; border: 1px solid var(--border); z-index: 1; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th, td { text-align: left; padding: 0.45rem 0.55rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); }
+    pre { background: var(--bg); padding: 0.85rem; border-radius: 8px; font-family: var(--mono); font-size: 0.74rem; color: #a5f3fc; max-height: 260px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display:flex;align-items:center;gap:0.6rem;">
+      <div style="width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#10b981);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;">G8</div>
+      <div>
+        <div style="font-weight:700;font-size:1.05rem;">GeoSense — Disaster Management Authority Command</div>
+        <div style="font-size:0.72rem;color:var(--muted);" id="auth-lbl">Not Authenticated</div>
+      </div>
+    </div>
+    <nav>
+      <a href="/">Phase 1</a>
+      <a href="/susceptibility-ui">Phase 2</a>
+      <a href="/risk-ui">Phase 3</a>
+      <a href="/gis-ui">Phase 4: GIS</a>
+      <a href="/xai-ui">Phase 5: XAI</a>
+      <a href="/agent-ui">Phase 6: Agent</a>
+      <a href="/resources-ui">Phase 7: Resources</a>
+      <a href="/authority-ui" class="active">Phase 8: Authority</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Auth Bar -->
+    <div id="auth-panel" class="panel" style="flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+      <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+        <input type="email" id="email" placeholder="Authority Email" value="authority@geosense.in">
+        <input type="password" id="password" placeholder="Password" value="Authority@123">
+        <button id="login-btn" class="btn">Login</button>
+        <button id="reg-btn" class="btn" style="background:var(--amber);">Provision & Login Authority</button>
+      </div>
+      <div id="auth-err" style="color:var(--red);font-size:0.8rem;"></div>
+    </div>
+
+    <div id="dash-content" style="display:none;flex-direction:column;gap:1.25rem;">
+      <div id="stats-grid" class="stats"></div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div style="font-weight:600;color:var(--blue);">Regional GIS Command Map</div>
+          <div id="map"></div>
+        </div>
+        <div class="panel">
+          <div style="font-weight:600;color:var(--blue);">State-Wise Risk Distribution</div>
+          <canvas id="state-chart" height="210"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="font-weight:600;color:var(--blue);">Incident Management & Verification</div>
+        <table>
+          <thead><tr><th>ID</th><th>Category</th><th>State</th><th>Status</th><th>Description</th><th>Actions</th></tr></thead>
+          <tbody id="inc-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div style="font-weight:600;color:var(--blue);">Generate Situation Report</div>
+          <div style="display:flex;gap:0.6rem;">
+            <select id="rep-state">
+              <option value="">All NE India States</option>
+              <option value="meghalaya">Meghalaya</option>
+              <option value="sikkim">Sikkim</option>
+              <option value="assam">Assam</option>
+              <option value="arunachal_pradesh">Arunachal Pradesh</option>
+            </select>
+            <button id="gen-rep" class="btn">Generate Report</button>
+          </div>
+          <pre id="rep-out">Click Generate Report to compile live Phase 1-7 data.</pre>
+        </div>
+
+        <div class="panel">
+          <div style="font-weight:600;color:var(--blue);">Administrative Audit Logs</div>
+          <pre id="audit-out">Loading audit logs...</pre>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let token = localStorage.getItem('gs_auth_token') || '';
+    let map = null, stateChart = null;
+
+    async function api(path, opts = {}) {
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Request failed');
+      return data;
+    }
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      try {
+        const d = await api('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+        });
+        token = d.access_token;
+        localStorage.setItem('gs_auth_token', token);
+        loadDashboard();
+      } catch (e) { document.getElementById('auth-err').textContent = e.message; }
+    });
+
+    document.getElementById('reg-btn').addEventListener('click', async () => {
+      try {
+        const d = await api('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+            full_name: 'NDMA Regional Authority',
+            role: 'AUTHORITY',
+            provision_secret: 'geosense-admin-provision'
+          })
+        });
+        token = d.access_token;
+        localStorage.setItem('gs_auth_token', token);
+        loadDashboard();
+      } catch (e) { document.getElementById('auth-err').textContent = e.message; }
+    });
+
+    async function loadDashboard() {
+      if (!token) return;
+      try {
+        const d = await api('/authority/dashboard');
+        document.getElementById('auth-err').textContent = '';
+        document.getElementById('auth-lbl').textContent = `Signed in: ${d.authority_user.full_name} (${d.authority_user.role})`;
+        document.getElementById('dash-content').style.display = 'flex';
+
+        document.getElementById('stats-grid').innerHTML = `
+          <div class="scard"><div class="val">${d.gis_summary.total_risk_assessments}</div><div class="lbl">Risk Locations</div></div>
+          <div class="scard"><div class="val" style="color:var(--red)">${d.gis_summary.high_risk_locations + d.gis_summary.critical_risk_locations}</div><div class="lbl">High/Critical</div></div>
+          <div class="scard"><div class="val" style="color:var(--amber)">${d.incidents_summary.pending}</div><div class="lbl">Pending Incidents</div></div>
+          <div class="scard"><div class="val" style="color:var(--green)">${d.resource_statistics.verified_resources}</div><div class="lbl">Verified Resources</div></div>
+          <div class="scard"><div class="val">${d.inspections_summary.total}</div><div class="lbl">Inspections</div></div>
+        `;
+
+        if (!map) {
+          map = L.map('map').setView([25.8, 92.4], 6);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+          const gj = await (await fetch('/gis/regions/states')).json();
+          L.geoJSON(gj, { style: { color: '#38bdf8', weight: 1.5, fillOpacity: 0.05 } }).addTo(map);
+          for (const h of d.hotspots) {
+            L.circleMarker([h.coordinates[1], h.coordinates[0]], { radius: 7, color: '#fff', fillColor: '#ef4444', fillOpacity: 0.9 })
+              .bindPopup(`<strong>${h.location_name || h.location_id}</strong><br>${h.risk_category} (${h.risk_score}/100)`).addTo(map);
+          }
+        }
+
+        const analytics = await api('/authority/analytics');
+        const states = Object.keys(analytics.state_distribution);
+        if (stateChart) stateChart.destroy();
+        stateChart = new Chart(document.getElementById('state-chart'), {
+          type: 'bar',
+          data: {
+            labels: states,
+            datasets: [
+              { label: 'HIGH/CRITICAL', data: states.map(s => (analytics.state_distribution[s].HIGH || 0) + (analytics.state_distribution[s].CRITICAL || 0)), backgroundColor: '#ef4444' },
+              { label: 'LOW/MODERATE', data: states.map(s => (analytics.state_distribution[s].LOW || 0) + (analytics.state_distribution[s].MODERATE || 0)), backgroundColor: '#10b981' }
+            ]
+          },
+          options: { plugins: { legend: { labels: { color: '#f8fafc' } } }, scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+        });
+
+        const incs = await api('/authority/incidents');
+        document.getElementById('inc-tbody').innerHTML = incs.incidents.map(i => `
+          <tr>
+            <td>${i.id}</td><td>${i.incident_category}</td><td>${i.state || 'N/A'}</td><td>${i.status}</td><td>${i.description.slice(0, 50)}</td>
+            <td>${i.status === 'PENDING' ? `<button class="btn" style="padding:0.2rem 0.45rem;font-size:0.7rem;" onclick="verifyInc('${i.id}','VERIFIED')">Verify</button>` : '—'}</td>
+          </tr>
+        `).join('');
+
+        const logs = await api('/authority/audit-logs?limit=15');
+        document.getElementById('audit-out').textContent = JSON.stringify(logs.logs, null, 2);
+      } catch (e) { document.getElementById('auth-err').textContent = e.message; }
+    }
+
+    window.verifyInc = async (id, st) => {
+      await api(`/incidents/${id}/verify`, { method: 'POST', body: JSON.stringify({ status: st, verification_notes: 'Verified via Authority Dashboard' }) });
+      loadDashboard();
+    };
+
+    document.getElementById('gen-rep').addEventListener('click', async () => {
+      const r = await api('/authority/situation-reports', {
+        method: 'POST',
+        body: JSON.stringify({ region_id: document.getElementById('rep-state').value || null, role: 'authority' })
+      });
+      document.getElementById('rep-out').textContent = JSON.stringify(r, null, 2);
+      loadDashboard();
+    });
+
+    if (token) loadDashboard();
+  </script>
+</body>
+</html>

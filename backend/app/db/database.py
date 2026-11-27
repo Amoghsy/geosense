@@ -653,3 +653,103 @@ def ensure_phase7_resource_schema() -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def ensure_phase8_schema() -> None:
+    """Safely create users, field_inspections, audit_logs, and extend incidents table."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                phone TEXT,
+                role TEXT NOT NULL DEFAULT 'CITIZEN',
+                assigned_state TEXT,
+                assigned_district TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+        existing_inc_cols = {
+            row["name"] for row in conn.execute("PRAGMA table_info(incidents)").fetchall()
+        }
+        inc_new_cols = {
+            "reporter_user_id": "TEXT",
+            "incident_category": "TEXT DEFAULT 'LANDSLIDE'",
+            "location_name": "TEXT",
+            "state": "TEXT",
+            "district": "TEXT",
+            "photo_path": "TEXT",
+            "incident_time": "TEXT",
+            "contact_info": "TEXT",
+            "assigned_officer_id": "TEXT",
+            "verification_notes": "TEXT",
+            "verified_by": "TEXT",
+            "verified_at": "TEXT",
+            "updated_at": "TEXT",
+        }
+        for col_name, col_def in inc_new_cols.items():
+            if col_name not in existing_inc_cols:
+                conn.execute(f"ALTER TABLE incidents ADD COLUMN {col_name} {col_def}")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS field_inspections (
+                inspection_id TEXT PRIMARY KEY,
+                officer_id TEXT NOT NULL,
+                location_id TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                location_name TEXT,
+                state TEXT,
+                district TEXT,
+                status TEXT NOT NULL DEFAULT 'NOT_STARTED',
+                observations TEXT,
+                inspection_notes TEXT,
+                photo_path TEXT,
+                follow_up_required INTEGER NOT NULL DEFAULT 0,
+                risk_score_snapshot REAL,
+                risk_category_snapshot TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                log_id TEXT PRIMARY KEY,
+                actor_user_id TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                action TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                timestamp TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS situation_reports (
+                report_id TEXT PRIMARY KEY,
+                generated_by TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                region_id TEXT,
+                state TEXT,
+                district TEXT,
+                report_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { geoSenseApi } from '../services/api';
 
 export type UserRole = 'citizen' | 'officer';
 
@@ -83,6 +84,7 @@ interface AppContextType {
   logoutCitizen: () => void;
   loginOfficer: (id?: string) => void;
   logoutOfficer: () => void;
+  submitIncidentToBackend: () => Promise<string | null>;
 }
 
 const defaultIncidentDraft: IncidentReportDraft = {
@@ -199,12 +201,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setVerificationReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'verified' } : r))
     );
+    if (geoSenseApi.getToken()) {
+      geoSenseApi.verifyIncident(id, 'VERIFIED', 'Verified from GeoSense Officer Mobile App').catch(() => {});
+    }
   };
 
   const rejectReport = (id: string) => {
     setVerificationReports((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'rejected' } : r))
     );
+    if (geoSenseApi.getToken()) {
+      geoSenseApi.verifyIncident(id, 'REJECTED', 'Rejected from GeoSense Officer Mobile App').catch(() => {});
+    }
+  };
+
+  const submitIncidentToBackend = async (): Promise<string | null> => {
+    if (!geoSenseApi.getToken()) return null;
+    try {
+      const res = await geoSenseApi.submitIncident({
+        incident_category: incidentDraft.type.toUpperCase().replace(/\s+/g, '_'),
+        description: incidentDraft.description,
+        latitude: 25.5788,
+        longitude: 91.8933,
+        location_name: incidentDraft.location,
+      });
+      updateIncidentDraft({ referenceId: res.incident_id });
+      return res.incident_id;
+    } catch {
+      return null;
+    }
   };
 
   const loginCitizen = (name?: string, phone?: string) => {
@@ -216,6 +241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const logoutCitizen = () => {
+    geoSenseApi.setToken(null);
     setIsLoggedInCitizen(false);
     setPortalTab('citizen');
     navigate('login-portal');
@@ -229,6 +255,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const logoutOfficer = () => {
+    geoSenseApi.setToken(null);
     setIsLoggedInOfficer(false);
     setPortalTab('officer');
     navigate('login-portal');
@@ -261,6 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         logoutCitizen,
         loginOfficer,
         logoutOfficer,
+        submitIncidentToBackend,
       }}>
       {children}
     </AppContext.Provider>

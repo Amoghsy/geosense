@@ -12,6 +12,8 @@ from app.api.risk_routes import router as risk_router
 from app.api.gis_routes import router as gis_router
 from app.api.agent_routes import router as agent_router
 from app.api.resource_routes import router as resource_router
+from app.api.auth_routes import router as auth_router
+from app.api.role_routes import router as role_router
 from app.ml.model_loader import get_model_manager
 from app.db.database import init_db
 
@@ -89,6 +91,10 @@ app.include_router(agent_router)
 app.include_router(agent_router, prefix="/api")
 app.include_router(resource_router)
 app.include_router(resource_router, prefix="/api")
+app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(role_router)
+app.include_router(role_router, prefix="/api")
 
 # Static files for results directory
 app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
@@ -164,6 +170,15 @@ async def serve_resources_ui():
     if os.path.isfile(html_file):
         return FileResponse(html_file, media_type="text/html")
     return HTMLResponse("<h1>GeoSense Phase 7 Emergency Resources</h1><p>Visit <a href='/docs'>/docs</a></p>")
+
+
+@app.get("/authority-ui", response_class=HTMLResponse, include_in_schema=False)
+async def serve_authority_ui():
+    """Serve the Phase 8 Disaster Management Authority Command Dashboard."""
+    html_file = os.path.join(STATIC_DIR, "authority.html")
+    if os.path.isfile(html_file):
+        return FileResponse(html_file, media_type="text/html")
+    return HTMLResponse("<h1>GeoSense Phase 8 Authority Dashboard</h1><p>Visit <a href='/docs'>/docs</a></p>")
 
 
 if __name__ == "__main__":

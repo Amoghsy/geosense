@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,25 @@ import {
 } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { HeaderBar } from '@/components/HeaderBar';
+import { geoSenseApi } from '@/services/api';
 
 export function CitizenHomeScreen() {
   const { navigate } = useApp();
   const [selectedHorizon, setSelectedHorizon] = useState('Next 6 Hours');
   const [isBannerOpen, setIsBannerOpen] = useState(false);
+  const [liveRiskCategory, setLiveRiskCategory] = useState<string>('HIGH');
+  const [liveRiskScore, setLiveRiskScore] = useState<string>('87');
+
+  useEffect(() => {
+    geoSenseApi.getCitizenRisk(25.2702, 91.7323, 'Cherrapunji, Meghalaya')
+      .then((res) => {
+        if (res?.risk_category) setLiveRiskCategory(res.risk_category);
+        if (res?.risk_score !== null && res?.risk_score !== undefined) {
+          setLiveRiskScore(String(Math.round(res.risk_score)));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -53,14 +67,14 @@ export function CitizenHomeScreen() {
               <Text style={styles.riskTagLabel}>CURRENT RISK</Text>
             </View>
             <View style={styles.highBadge}>
-              <Text style={styles.highBadgeText}>HIGH</Text>
+              <Text style={styles.highBadgeText}>{liveRiskCategory}</Text>
             </View>
           </View>
 
           <View style={styles.riskValueRow}>
-            <Text style={styles.riskPercentage}>87%</Text>
+            <Text style={styles.riskPercentage}>{liveRiskScore}</Text>
             <View style={styles.riskSubInfo}>
-              <Text style={styles.riskSubtitle}>Landslide probability</Text>
+              <Text style={styles.riskSubtitle}>Heuristic risk index</Text>
               <Text style={styles.riskWindow}>Next 6 Hours</Text>
             </View>
           </View>
