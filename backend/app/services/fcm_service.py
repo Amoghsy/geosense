@@ -27,9 +27,33 @@ class FCMService:
     def __init__(self):
         self._initialized = False
 
+    def _build_inline_credentials_dict(self) -> Optional[Dict[str, Any]]:
+        project_id = os.getenv("FIREBASE_PROJECT_ID", "").strip()
+        client_email = os.getenv("FIREBASE_CLIENT_EMAIL", "").strip()
+        private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").strip()
+        if not (project_id and client_email and private_key):
+            return None
+        return {
+            "type": os.getenv("FIREBASE_TYPE", "service_account"),
+            "project_id": project_id,
+            "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID", ""),
+            "private_key": private_key.replace("\\n", "\n"),
+            "client_email": client_email,
+            "client_id": os.getenv("FIREBASE_CLIENT_ID", ""),
+            "auth_uri": os.getenv("FIREBASE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth"),
+            "token_uri": os.getenv("FIREBASE_TOKEN_URI", "https://oauth2.googleapis.com/token"),
+            "auth_provider_x509_cert_url": os.getenv(
+                "FIREBASE_AUTH_PROVIDER_X509_CERT_URL", "https://www.googleapis.com/oauth2/v1/certs"
+            ),
+            "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL", ""),
+            "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN", "googleapis.com"),
+        }
+
     def is_configured(self) -> bool:
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        return bool(FIREBASE_SDK_AVAILABLE and cred_path and os.path.isfile(cred_path))
+        has_file = bool(cred_path and os.path.isfile(cred_path))
+        has_inline = self._build_inline_credentials_dict() is not None
+        return bool(FIREBASE_SDK_AVAILABLE and (has_file or has_inline))
 
     def _ensure_initialized(self) -> bool:
         if self._initialized:
@@ -39,7 +63,10 @@ class FCMService:
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         try:
             if not firebase_admin._apps:
-                cred = credentials.Certificate(cred_path)
+                if cred_path and os.path.isfile(cred_path):
+                    cred = credentials.Certificate(cred_path)
+                else:
+                    cred = credentials.Certificate(self._build_inline_credentials_dict())
                 firebase_admin.initialize_app(cred)
             self._initialized = True
             return True
