@@ -183,6 +183,19 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_sessions (
+                session_id TEXT PRIMARY KEY,
+                user_role TEXT NOT NULL,
+                user_id TEXT,
+                location_context_json TEXT NOT NULL,
+                messages_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
         logger.info(f"Initialized SQLite database at {DB_PATH}")
     finally:
@@ -506,5 +519,79 @@ def get_risk_assessments_chronological(
         )
         rows = conn.execute(sql, tuple(params)).fetchall()
         return [json.loads(r["raw_payload"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def create_agent_session(session: Dict[str, Any]) -> None:
+    """Create a new Phase 6 agent conversation session."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO agent_sessions (
+                session_id, user_role, user_id, location_context_json,
+                messages_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session["session_id"],
+                session["user_role"],
+                session.get("user_id"),
+                json.dumps(session.get("location_context", {})),
+                json.dumps(session.get("messages", [])),
+                session["created_at"],
+                session["updated_at"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_agent_session(session_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve a Phase 6 agent session by ID."""
+    if not os.path.isfile(DB_PATH):
+        return None
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT * FROM agent_sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "session_id": row["session_id"],
+            "user_role": row["user_role"],
+            "user_id": row["user_id"],
+            "location_context": json.loads(row["location_context_json"]),
+            "messages": json.loads(row["messages_json"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+    finally:
+        conn.close()
+
+
+def update_agent_session(
+    session_id: str,
+    location_context: Dict[str, Any],
+    messages: List[Dict[str, Any]],
+    updated_at: str,
+) -> None:
+    """Update conversation history and location context for an existing session."""
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            UPDATE agent_sessions
+            SET location_context_json = ?, messages_json = ?, updated_at = ?
+            WHERE session_id = ?
+            """,
+            (json.dumps(location_context), json.dumps(messages), updated_at, session_id),
+        )
+        conn.commit()
     finally:
         conn.close()

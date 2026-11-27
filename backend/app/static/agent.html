@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoSense Phase 6 — AI Landslide Decision-Support Agent</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f172a; --card: #1e293b; --subtle: #182234; --border: #334155;
+      --text: #f8fafc; --muted: #94a3b8; --blue: #38bdf8;
+      --low: #10b981; --mod: #f59e0b; --high: #f97316; --crit: #ef4444;
+      --mono: 'JetBrains Mono', monospace; --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); height: 100vh; display: flex; flex-direction: column; }
+    header { background: rgba(15,23,42,0.95); border-bottom: 1px solid var(--border); padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+    nav { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.78rem; padding: 0.35rem 0.65rem; border-radius: 6px; border: 1px solid var(--border); }
+    nav a.active { background: var(--blue); color: #0f172a; border-color: var(--blue); font-weight: 600; }
+    .layout { flex: 1; max-width: 1360px; width: 100%; margin: 0 auto; padding: 1.25rem; display: grid; grid-template-columns: 320px 1fr; gap: 1.25rem; overflow: hidden; }
+    @media (max-width: 960px) { .layout { grid-template-columns: 1fr; overflow-y: auto; } body { height: auto; } }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; display: flex; flex-direction: column; gap: 0.85rem; overflow-y: auto; }
+    label { display: block; font-size: 0.74rem; color: var(--muted); margin-bottom: 0.25rem; }
+    select, input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 0.48rem 0.65rem; border-radius: 6px; font-size: 0.82rem; }
+    .btn { background: var(--blue); color: #0f172a; border: none; padding: 0.55rem 0.9rem; border-radius: 6px; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+    .sugg { background: var(--subtle); border: 1px solid var(--border); color: var(--text); padding: 0.45rem 0.65rem; border-radius: 6px; font-size: 0.76rem; cursor: pointer; text-align: left; }
+    .sugg:hover { border-color: var(--blue); }
+    .chat-box { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.85rem; padding-right: 0.4rem; }
+    .msg { padding: 0.85rem 1rem; border-radius: 10px; font-size: 0.85rem; line-height: 1.5; max-width: 92%; }
+    .msg-user { align-self: flex-end; background: #1d4ed8; color: #fff; }
+    .msg-ai { align-self: flex-start; background: var(--subtle); border: 1px solid var(--border); width: 100%; }
+    .tool-badge { display: inline-block; font-family: var(--mono); font-size: 0.68rem; background: rgba(56,189,248,0.15); color: var(--blue); padding: 0.15rem 0.45rem; border-radius: 4px; margin: 0.2rem 0.25rem 0 0; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem; margin-top: 0.65rem; }
+    .dcard { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; font-size: 0.76rem; }
+    .input-row { display: flex; gap: 0.6rem; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display:flex;align-items:center;gap:0.6rem;">
+      <div style="width:32px;height:32px;background:linear-gradient(135deg,#06b6d4,#3b82f6);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;">G6</div>
+      <div>
+        <div style="font-weight:700;font-size:1.05rem;">GeoSense — AI Decision-Support Agent</div>
+        <div style="font-size:0.72rem;color:var(--muted);" id="mode-lbl">Checking Agent Status...</div>
+      </div>
+    </div>
+    <nav>
+      <a href="/">Phase 1: Detection</a>
+      <a href="/susceptibility-ui">Phase 2: Susceptibility</a>
+      <a href="/risk-ui">Phase 3: Dynamic Risk</a>
+      <a href="/gis-ui">Phase 4: GIS Map</a>
+      <a href="/xai-ui">Phase 5: XAI & Trends</a>
+      <a href="/agent-ui" class="active">Phase 6: AI Agent</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <div class="panel">
+      <div>
+        <label>Active User Role (Enforces Access Control)</label>
+        <select id="role">
+          <option value="citizen">Citizen (Public Safety & Local Risk)</option>
+          <option value="field_officer">Field Officer (Inspections & Incidents)</option>
+          <option value="authority">Disaster Authority (Hotspots & Situation Reports)</option>
+        </select>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+        <div><label>Latitude</label><input type="number" step="0.0001" id="lat" value="25.5788"></div>
+        <div><label>Longitude</label><input type="number" step="0.0001" id="lon" value="91.8933"></div>
+      </div>
+      <div><label>Location Name</label><input type="text" id="loc-name" value="Shillong, Meghalaya"></div>
+
+      <button id="new-sess" class="btn" style="background:#334155;color:#f8fafc;">Start New Conversation</button>
+
+      <div style="border-top:1px solid var(--border);padding-top:0.75rem;">
+        <label>Role-Specific Suggested Questions</label>
+        <div id="sugg-box" style="display:flex;flex-direction:column;gap:0.45rem;"></div>
+      </div>
+    </div>
+
+    <div class="panel chat-box">
+      <div id="messages" class="messages">
+        <div class="msg msg-ai">
+          <strong>GeoSense Decision-Support Agent ready.</strong> Ask about landslide risk, rainfall, factor explanations, satellite detections, or situation reports. All answers are grounded in real Phase 1–5 records.
+        </div>
+      </div>
+      <div class="input-row">
+        <input type="text" id="msg-input" placeholder="Ask GeoSense (e.g., What is the current landslide risk in Shillong? Why?)">
+        <button id="send-btn" class="btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let sessionId = null;
+    const qp = new URLSearchParams(window.location.search);
+    if (qp.get('latitude')) document.getElementById('lat').value = qp.get('latitude');
+    if (qp.get('longitude')) document.getElementById('lon').value = qp.get('longitude');
+    if (qp.get('location_name')) document.getElementById('loc-name').value = qp.get('location_name');
+
+    const roleQuestions = {
+      citizen: [
+        "What is the current landslide risk in Shillong?",
+        "Is heavy rainfall expected in Shillong?",
+        "Why is the landslide risk at this level?",
+        "Are there any satellite detections here?"
+      ],
+      field_officer: [
+        "Which areas in Meghalaya should field officers inspect first?",
+        "Has the risk in Shillong increased over the last 7 days?",
+        "Are there any recent satellite-detected landslide features?",
+        "Generate a situation report for Meghalaya."
+      ],
+      authority: [
+        "Generate a situation report for Meghalaya.",
+        "Which areas currently have elevated risk hotspots?",
+        "Why is Shillong at its current risk level?",
+        "Summarize Phase 2 susceptibility for Meghalaya."
+      ]
+    };
+
+    function renderSuggestions() {
+      const r = document.getElementById('role').value;
+      const box = document.getElementById('sugg-box');
+      box.innerHTML = '';
+      for (const q of roleQuestions[r]) {
+        const b = document.createElement('button');
+        b.className = 'sugg';
+        b.textContent = q;
+        b.onclick = () => { document.getElementById('msg-input').value = q; sendMessage(); };
+        box.appendChild(b);
+      }
+    }
+
+    document.getElementById('role').addEventListener('change', () => { sessionId = null; renderSuggestions(); });
+    document.getElementById('new-sess').addEventListener('click', () => {
+      sessionId = null;
+      document.getElementById('messages').innerHTML = '<div class="msg msg-ai">Started a new conversation session.</div>';
+    });
+
+    fetch('/agent/health').then(r => r.json()).then(h => {
+      document.getElementById('mode-lbl').textContent = `Mode: ${h.active_execution_mode} | ADK Installed: ${h.google_adk_installed}`;
+    });
+
+    async function sendMessage() {
+      const inp = document.getElementById('msg-input');
+      const text = inp.value.trim();
+      if (!text) return;
+      inp.value = '';
+
+      const msgs = document.getElementById('messages');
+      msgs.innerHTML += `<div class="msg msg-user">${text}</div>`;
+      const loadingId = 'ld_' + Date.now();
+      msgs.innerHTML += `<div id="${loadingId}" class="msg msg-ai" style="color:var(--muted);">Running GeoSense tools...</div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+
+      const body = {
+        message: text,
+        session_id: sessionId,
+        role: document.getElementById('role').value,
+        location_context: {
+          latitude: parseFloat(document.getElementById('lat').value),
+          longitude: parseFloat(document.getElementById('lon').value),
+          location_name: document.getElementById('loc-name').value || null
+        }
+      };
+
+      try {
+        const res = await fetch('/agent/chat', {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+        });
+        const d = await res.json();
+        document.getElementById(loadingId).remove();
+        if (!res.ok) throw new Error(d.detail || 'Agent request failed');
+        sessionId = d.session_id;
+
+        let cards = '';
+        if (d.structured_data?.risk_summary) {
+          const rs = d.structured_data.risk_summary;
+          cards += `<div class="dcard"><strong>Risk:</strong> ${rs.risk_category} (${rs.risk_score}/100)<br>Completeness: ${Math.round(rs.completeness_score*100)}%</div>`;
+        }
+        if (d.structured_data?.rainfall_summary) {
+          const rf = d.structured_data.rainfall_summary;
+          cards += `<div class="dcard"><strong>24h Obs Rain:</strong> ${rf.observed_mm['24h']} mm<br><strong>24h Fcst:</strong> ${rf.forecast_mm.next_24h} mm</div>`;
+        }
+        if (d.structured_data?.hotspots?.length) {
+          cards += `<div class="dcard"><strong>Hotspots:</strong> ${d.structured_data.hotspots.length} elevated location(s)</div>`;
+        }
+        const toolsHtml = (d.tools_used || []).map(t => `<span class="tool-badge">${t}</span>`).join('');
+        const srcHtml = (d.source_references || []).length ? `<div style="font-size:0.7rem;color:var(--muted);margin-top:0.35rem;">Sources: ${d.source_references.join(', ')}</div>` : '';
+
+        msgs.innerHTML += `
+          <div class="msg msg-ai">
+            <div>${d.reply}</div>
+            ${cards ? `<div class="card-grid">${cards}</div>` : ''}
+            <div style="margin-top:0.4rem;">${toolsHtml}</div>
+            ${srcHtml}
+          </div>`;
+      } catch (err) {
+        const ld = document.getElementById(loadingId);
+        if (ld) ld.textContent = `Error: ${err.message}`;
+      }
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    document.getElementById('send-btn').addEventListener('click', sendMessage);
+    document.getElementById('msg-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+    renderSuggestions();
+  </script>
+</body>
+</html>

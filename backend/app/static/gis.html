@@ -63,6 +63,7 @@
       <a href="/risk-ui">Phase 3: Dynamic Risk</a>
       <a href="/gis-ui" class="active">Phase 4: GIS Map</a>
       <a href="/xai-ui">Phase 5: XAI & Trends</a>
+      <a href="/agent-ui">Phase 6: AI Agent</a>
       <a href="/docs" target="_blank">Swagger API</a>
     </nav>
   </header>
@@ -310,6 +311,7 @@
         <div><strong>Satellite Detections (Phase 1):</strong> ${p1.length ? `${p1.length} feature(s)` : 'Unavailable'}</div>
         <div><strong>Updated:</strong> ${risk?.timestamp || susc?.timestamp || 'N/A'}</div>
         ${xaiHtml}
+        <a href="/agent-ui?latitude=${d.latitude}&longitude=${d.longitude}&location_name=${encodeURIComponent(d.state || 'Selected Location')}" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:0.4rem;background:#334155;color:#f8fafc;">Ask AI Agent →</a>
       `;
     }
 

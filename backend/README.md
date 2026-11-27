@@ -413,3 +413,21 @@ Phase 5 makes every Phase 3 risk assessment transparent, auditable, and trackabl
 - `GET /risk/{assessment_id}/contributing-factors`
 - `GET /risk/{location_id}/trends`
 - `GET /risk/{location_id}/comparison?assessment_id_1=...&assessment_id_2=...`
+
+
+---
+
+## 15. Phase 6 — AI Decision-Support Agent
+
+Phase 6 implements a grounded **GeoSense Orchestrator Agent** that queries real Phases 1–5 services via callable backend tools, enforces role-based access (`citizen`, `field_officer`, `authority`), and retains session conversation context.
+
+### Architecture & Execution Modes:
+- **Google ADK Integration (`app/agent/orchestrator.py`):** Configured with `google.adk.agents.Agent` and all 9 GeoSense backend tools (`app/agent/tools.py`) when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is provided.
+- **Grounded Deterministic Tool-Router:** Automatically active when no external LLM key is configured, routing natural-language queries and follow-up questions directly to real GeoSense services with zero fabricated data.
+- **Chat UI (`http://localhost:8000/agent-ui`):** Role selector, suggested questions, session memory, tool execution badges, and structured visual cards, linked directly from the Phase 4 GIS Map (`/gis-ui`).
+
+### Phase 6 Endpoints:
+- `GET /agent/health`
+- `POST /agent/sessions` & `GET /agent/sessions/{session_id}`
+- `POST /agent/chat`
+- `POST /agent/situation-report` (restricted to `field_officer` and `authority` roles)
