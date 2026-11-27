@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.satellite_routes import router as satellite_router
 from app.api.susceptibility_routes import router as susceptibility_router
+from app.api.risk_routes import router as risk_router
 from app.ml.model_loader import get_model_manager
 from app.db.database import init_db
 
@@ -77,6 +78,8 @@ app.include_router(satellite_router)
 app.include_router(satellite_router, prefix="/api")
 app.include_router(susceptibility_router)
 app.include_router(susceptibility_router, prefix="/api")
+app.include_router(risk_router)
+app.include_router(risk_router, prefix="/api")
 
 # Static files for results directory
 app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
@@ -107,6 +110,15 @@ async def serve_susceptibility_ui():
     if os.path.isfile(html_file):
         return FileResponse(html_file, media_type="text/html")
     return HTMLResponse("<h1>GeoSense Phase 2 Susceptibility</h1><p>Visit <a href='/docs'>/docs</a></p>")
+
+
+@app.get("/risk-ui", response_class=HTMLResponse, include_in_schema=False)
+async def serve_risk_ui():
+    """Serve the temporary HTML testing web interface for Phase 3 Dynamic Risk Assessment."""
+    html_file = os.path.join(STATIC_DIR, "risk.html")
+    if os.path.isfile(html_file):
+        return FileResponse(html_file, media_type="text/html")
+    return HTMLResponse("<h1>GeoSense Phase 3 Dynamic Risk</h1><p>Visit <a href='/docs'>/docs</a></p>")
 
 
 if __name__ == "__main__":

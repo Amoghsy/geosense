@@ -338,3 +338,36 @@ Phase 2 integrates the pretrained **Multimodal Late-Fusion** model from [`vinuka
 ### Geographic Coverage & Known Limitations:
 - Supports region tagging for Meghalaya, Sikkim, Assam, Arunachal Pradesh, Manipur, Mizoram, Nagaland, and Tripura.
 - **Uncalibrated Prototype:** The pretrained weights are an academic prototype not locally calibrated for North Eastern India and do not incorporate live rainfall or seismic triggers (reserved for Phase 3).
+
+
+---
+
+## 12. Phase 3 — Weather-Integrated Dynamic Landslide Risk Engine
+
+Phase 3 fuses live Open-Meteo weather, 30-day historical rainfall, Antecedent Wetness Index (AWI) proxy, 72-hour rainfall forecasts, terrain attributes, and verified Phase 1 & Phase 2 outputs into a transparent, configurable **0–100 Heuristic Risk Index**.
+
+> **Important Disclaimer:** The Phase 3 Risk Index is a provisional heuristic score requiring regional calibration for North Eastern India. It is **not** a calibrated landslide probability and **not** a guarantee or exact timing prediction of a landslide event.
+
+### Open-Meteo Integration (`weather_service.py`):
+- **Current & 7d Past + 3d Forecast:** `https://api.open-meteo.com/v1/forecast` (`precipitation, temperature_2m, relative_humidity_2m, wind_speed_10m, weather_code`).
+- **Historical Archive (up to 32 days):** `https://archive-api.open-meteo.com/v1/archive` (`hourly=precipitation`).
+- **Caching & Freshness:** 15-minute TTL cache (`WEATHER_CACHE_TTL_SECONDS=900`), stale observation detection (`> 3h`), and strict separation of observed vs forecast timestamps.
+
+### Rainfall Intelligence Engine (`landslide_weather_analyzer.py`):
+- **Rolling Observed Windows:** `1h`, `3h`, `6h`, `24h`, `72h`, `7d`, `15d`, `30d` (missing hours marked incomplete, never silently zeroed).
+- **Forecast Windows:** `next_3h`, `next_6h`, `next_24h`, `next_72h`.
+- **Antecedent Wetness Index (AWI) Proxy:** `AWI(t) = P(t) + k * AWI(t-1)` (`k=0.85` configurable via `AWI_DECAY_K`). Labeled explicitly as a rainfall-based wetness proxy, **not** measured soil moisture.
+
+### Dynamic Risk Fusion (`landslide_risk_engine.py`):
+- **Configurable Weights:** `observed_rainfall (0.30)`, `forecast_rainfall (0.20)`, `baseline_susceptibility (0.25)`, `terrain (0.15)`, `satellite_detection (0.10)`. Unavailable factors are excluded and remaining weights normalized to `1.0`.
+- **Provisional Categories:** `0–24 LOW`, `25–49 MODERATE`, `50–74 HIGH`, `75–100 CRITICAL`, or `INSUFFICIENT_DATA` if weather inputs fail.
+
+### Phase 3 Endpoints & Testing UI:
+- **Temporary Risk Dashboard:** `http://localhost:8000/risk-ui`
+- `GET /weather/current?latitude=...&longitude=...`
+- `GET /weather/rainfall?latitude=...&longitude=...`
+- `POST /risk/analyze`
+- `GET /risk/hotspots`
+- `GET /risk/{location_id}`
+- `GET /risk/{assessment_id}/explain`
+- `GET /risk/{assessment_id}/history`

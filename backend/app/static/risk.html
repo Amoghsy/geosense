@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoSense Phase 3 — Dynamic Landslide Risk & Early Warning</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a; --bg-card: #1e293b; --bg-subtle: #182234;
+      --border: #334155; --text: #f8fafc; --muted: #94a3b8;
+      --low: #10b981; --mod: #f59e0b; --high: #f97316; --crit: #ef4444; --blue: #38bdf8;
+      --mono: 'JetBrains Mono', monospace; --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg-dark); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: rgba(15,23,42,0.92); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .logo { width: 36px; height: 36px; background: linear-gradient(135deg, #38bdf8, #2563eb); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    nav { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.82rem; padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); }
+    nav a.active { background: var(--blue); color: #0f172a; border-color: var(--blue); font-weight: 600; }
+    .banner { background: rgba(56,189,248,0.1); border-bottom: 1px solid rgba(56,189,248,0.25); padding: 0.6rem 2rem; font-size: 0.8rem; color: #bae6fd; text-align: center; }
+    main { flex: 1; max-width: 1360px; width: 100%; margin: 0 auto; padding: 1.5rem 2rem; display: grid; grid-template-columns: 380px 1fr; gap: 1.5rem; }
+    @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+    label { display: block; font-size: 0.76rem; color: var(--muted); margin-bottom: 0.3rem; font-weight: 500; }
+    select, input { width: 100%; background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); padding: 0.5rem 0.7rem; border-radius: 6px; font-size: 0.84rem; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+    .btn { background: linear-gradient(135deg, #38bdf8, #0284c7); color: #0f172a; border: none; padding: 0.8rem; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    #map { height: 290px; border-radius: 8px; border: 1px solid var(--border); z-index: 1; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 0.8rem; }
+    .mcard { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; }
+    .mlabel { font-size: 0.7rem; text-transform: uppercase; color: var(--muted); }
+    .mval { font-size: 1.2rem; font-weight: 700; font-family: var(--mono); margin-top: 0.2rem; }
+    .cat-LOW { color: var(--low); } .cat-MODERATE { color: var(--mod); } .cat-HIGH { color: var(--high); } .cat-CRITICAL { color: var(--crit); }
+    .box { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; font-size: 0.82rem; line-height: 1.5; }
+    .warn-box { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #fde68a; border-radius: 8px; padding: 0.8rem; font-size: 0.78rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">G3</div>
+      <div>
+        <div style="font-weight:700; font-size:1.15rem;">GeoSense — Phase 3</div>
+        <div style="font-size:0.75rem; color:var(--muted);">Weather-Integrated Dynamic Risk Assessment (Temporary UI)</div>
+      </div>
+    </div>
+    <nav>
+      <a href="/">Phase 1: Detection</a>
+      <a href="/susceptibility-ui">Phase 2: Susceptibility</a>
+      <a href="/risk-ui" class="active">Phase 3: Dynamic Risk</a>
+      <a href="/docs" target="_blank">Swagger API</a>
+    </nav>
+  </header>
+
+  <div class="banner">
+    <strong>Provisional Heuristic Risk Index (0–100):</strong> Combines live Open-Meteo rainfall + 30-day archive + AWI proxy + forecast + optional Phase 1/2/Terrain inputs. Not a calibrated landslide probability.
+  </div>
+
+  <main>
+    <div class="panel">
+      <div style="font-weight:600; font-size:1rem;">Location & Evidence Inputs</div>
+
+      <div>
+        <label for="preset">NE India Preset Locations</label>
+        <select id="preset">
+          <option value="25.5788,91.8933,Shillong (Meghalaya)">Shillong, Meghalaya (25.5788, 91.8933)</option>
+          <option value="27.3389,88.6065,Gangtok (Sikkim)">Gangtok, Sikkim (27.3389, 88.6065)</option>
+          <option value="26.1445,91.7362,Guwahati (Assam)">Guwahati, Assam (26.1445, 91.7362)</option>
+          <option value="27.0844,93.6053,Itanagar (Arunachal Pradesh)">Itanagar, Arunachal Pradesh (27.0844, 93.6053)</option>
+          <option value="24.8170,93.9368,Imphal (Manipur)">Imphal, Manipur (24.8170, 93.9368)</option>
+          <option value="23.7271,92.7176,Aizawl (Mizoram)">Aizawl, Mizoram (23.7271, 92.7176)</option>
+          <option value="25.6751,94.1086,Kohima (Nagaland)">Kohima, Nagaland (25.6751, 94.1086)</option>
+          <option value="23.8315,91.2868,Agartala (Tripura)">Agartala, Tripura (23.8315, 91.2868)</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div><label>Latitude</label><input type="number" step="0.0001" id="lat" value="25.5788"></div>
+        <div><label>Longitude</label><input type="number" step="0.0001" id="lon" value="91.8933"></div>
+      </div>
+
+      <div><label>Location Name</label><input type="text" id="loc-name" value="Shillong (Meghalaya)"></div>
+
+      <div class="row2">
+        <div><label>Elevation (m, optional)</label><input type="number" step="1" id="elev" placeholder="e.g. 1496"></div>
+        <div><label>Slope (deg, optional)</label><input type="number" step="0.1" id="slope" placeholder="e.g. 28.5"></div>
+      </div>
+
+      <div class="row2">
+        <div><label>Phase 1 Detection ID (opt)</label><input type="text" id="p1-id" placeholder="e.g. a1b2c3d4e5f6"></div>
+        <div><label>Phase 2 Analysis ID (opt)</label><input type="text" id="p2-id" placeholder="e.g. f6e5d4c3b2a1"></div>
+      </div>
+
+      <button id="run-btn" class="btn">Assess Dynamic Landslide Risk</button>
+      <div id="err-msg" style="color:#fca5a5; font-size:0.8rem; display:none;"></div>
+
+      <div style="border-top:1px solid var(--border); padding-top:0.8rem;">
+        <div style="font-size:0.8rem; font-weight:600; color:var(--muted); margin-bottom:0.4rem;">ACTIVE HOTSPOTS (HIGH / CRITICAL)</div>
+        <div id="hotspots-list" style="font-size:0.78rem; color:var(--muted);">Loading hotspots...</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div id="map"></div>
+
+      <div id="empty" class="box" style="text-align:center; color:var(--muted); padding:2rem;">
+        Click <strong>Assess Dynamic Landslide Risk</strong> (or click anywhere on the map) to fetch live Open-Meteo current, 30-day archive, and 72-hour forecast data.
+      </div>
+
+      <div id="out" style="display:none; flex-direction:column; gap:1rem;">
+        <div class="metrics">
+          <div class="mcard"><div class="mlabel">Risk Category</div><div id="m-cat" class="mval">-</div></div>
+          <div class="mcard"><div class="mlabel">Heuristic Risk Index</div><div id="m-score" class="mval">-</div></div>
+          <div class="mcard"><div class="mlabel">Data Completeness</div><div id="m-comp" class="mval">-</div></div>
+          <div class="mcard"><div class="mlabel">AWI Proxy (Not Soil Moisture)</div><div id="m-awi" class="mval">-</div></div>
+        </div>
+
+        <div class="box">
+          <strong style="color:var(--blue);">Risk Explanation:</strong><br>
+          <span id="r-explain"></span>
+        </div>
+
+        <div class="box">
+          <strong style="color:var(--blue);">Observed vs Forecast Rainfall (Open-Meteo):</strong>
+          <div id="rain-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:0.5rem; margin-top:0.5rem; font-family:var(--mono); font-size:0.76rem;"></div>
+        </div>
+
+        <div id="warn-box" class="warn-box" style="display:none;"></div>
+
+        <div class="box">
+          <strong style="color:var(--blue);">Historical Assessments for Location:</strong>
+          <table style="margin-top:0.4rem;">
+            <thead><tr><th>Time (UTC)</th><th>Category</th><th>Score</th><th>Completeness</th></tr></thead>
+            <tbody id="hist-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const map = L.map('map').setView([25.9, 92.2], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    let marker = L.marker([25.5788, 91.8933]).addTo(map);
+
+    map.on('click', (e) => {
+      document.getElementById('lat').value = e.latlng.lat.toFixed(4);
+      document.getElementById('lon').value = e.latlng.lng.toFixed(4);
+      document.getElementById('loc-name').value = `Custom (${e.latlng.lat.toFixed(3)}, ${e.latlng.lng.toFixed(3)})`;
+      marker.setLatLng(e.latlng);
+    });
+
+    document.getElementById('preset').addEventListener('change', (e) => {
+      const [la, lo, name] = e.target.value.split(',');
+      document.getElementById('lat').value = la;
+      document.getElementById('lon').value = lo;
+      document.getElementById('loc-name').value = name;
+      const ll = [parseFloat(la), parseFloat(lo)];
+      marker.setLatLng(ll);
+      map.setView(ll, 8);
+    });
+
+    async function loadHotspots() {
+      try {
+        const res = await fetch('/risk/hotspots');
+        const data = await res.json();
+        const el = document.getElementById('hotspots-list');
+        if (!data.hotspots.length) {
+          el.textContent = 'No HIGH or CRITICAL hotspots recorded yet.';
+          return;
+        }
+        el.innerHTML = data.hotspots.map(h =>
+          `<div>• <strong>${h.location_name || h.location_id}</strong>: <span class="cat-${h.risk_category}">${h.risk_category}</span> (${h.risk_score}/100)</div>`
+        ).join('');
+      } catch {}
+    }
+    loadHotspots();
+
+    document.getElementById('run-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('run-btn');
+      const err = document.getElementById('err-msg');
+      btn.disabled = true; btn.textContent = 'Fetching Open-Meteo & Computing Risk...';
+      err.style.display = 'none';
+
+      const body = {
+        latitude: parseFloat(document.getElementById('lat').value),
+        longitude: parseFloat(document.getElementById('lon').value),
+        location_name: document.getElementById('loc-name').value || null,
+        elevation_m: document.getElementById('elev').value ? parseFloat(document.getElementById('elev').value) : null,
+        slope_deg: document.getElementById('slope').value ? parseFloat(document.getElementById('slope').value) : null,
+        phase1_result_id: document.getElementById('p1-id').value || null,
+        phase2_analysis_id: document.getElementById('p2-id').value || null,
+      };
+
+      try {
+        const res = await fetch('/risk/analyze', {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || 'Risk analysis failed');
+        renderRisk(d);
+        loadHotspots();
+      } catch (e) {
+        err.textContent = e.message; err.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Assess Dynamic Landslide Risk';
+      }
+    });
+
+    async function renderRisk(d) {
+      document.getElementById('empty').style.display = 'none';
+      document.getElementById('out').style.display = 'flex';
+
+      const catEl = document.getElementById('m-cat');
+      catEl.textContent = d.risk_category;
+      catEl.className = `mval cat-${d.risk_category}`;
+
+      document.getElementById('m-score').textContent = d.risk_score !== null ? `${d.risk_score}/100` : 'N/A';
+      document.getElementById('m-comp').textContent = `${Math.round(d.completeness_score * 100)}%`;
+      const awi = d.rainfall_indicators?.awi_proxy?.awi_value;
+      document.getElementById('m-awi').textContent = awi !== null && awi !== undefined ? `${awi} mm` : 'N/A';
+      document.getElementById('r-explain').textContent = d.explanation;
+
+      const obs = d.rainfall_indicators?.observed_windows || {};
+      const fc = d.rainfall_indicators?.forecast_windows || {};
+      const items = [
+        ['Obs 1h', obs['1h']?.rainfall_mm], ['Obs 24h', obs['24h']?.rainfall_mm],
+        ['Obs 72h', obs['72h']?.rainfall_mm], ['Obs 7d', obs['7d']?.rainfall_mm],
+        ['Obs 30d', obs['30d']?.rainfall_mm], ['Fcst 24h', fc['next_24h']?.rainfall_mm],
+        ['Fcst 72h', fc['next_72h']?.rainfall_mm]
+      ];
+      document.getElementById('rain-grid').innerHTML = items.map(([k, v]) =>
+        `<div style="background:var(--bg-dark);padding:0.45rem;border-radius:6px;border:1px solid var(--border);"><div style="color:var(--muted);font-size:0.68rem;">${k}</div><div>${v !== null && v !== undefined ? v + ' mm' : 'N/A'}</div></div>`
+      ).join('');
+
+      const wBox = document.getElementById('warn-box');
+      const allW = [...(d.warnings || []), ...(d.missing_factors.length ? ['Missing factors: ' + d.missing_factors.join(', ')] : [])];
+      if (allW.length) {
+        wBox.innerHTML = allW.map(w => `• ${w}`).join('<br>');
+        wBox.style.display = 'block';
+      } else {
+        wBox.style.display = 'none';
+      }
+
+      try {
+        const hRes = await fetch(`/risk/${d.assessment_id}/history`);
+        const hData = await hRes.json();
+        document.getElementById('hist-body').innerHTML = (hData.assessments || []).slice(0, 8).map(a =>
+          `<tr><td>${a.assessment_time.slice(0,19)}Z</td><td class="cat-${a.risk_category}">${a.risk_category}</td><td>${a.risk_score ?? 'N/A'}</td><td>${Math.round(a.completeness_score*100)}%</td></tr>`
+        ).join('');
+      } catch {}
+    }
+  </script>
+</body>
+</html>

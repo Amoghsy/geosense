@@ -41,6 +41,65 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weather_observations (
+                id TEXT PRIMARY KEY,
+                location_id TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                precipitation REAL,
+                temperature REAL,
+                humidity REAL,
+                wind_speed REAL,
+                weather_code INTEGER,
+                observation_time TEXT NOT NULL,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(location_id, observation_time)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rainfall_analyses (
+                id TEXT PRIMARY KEY,
+                location_id TEXT NOT NULL,
+                rainfall_1h REAL,
+                rainfall_3h REAL,
+                rainfall_6h REAL,
+                rainfall_24h REAL,
+                rainfall_72h REAL,
+                rainfall_7d REAL,
+                rainfall_15d REAL,
+                rainfall_30d REAL,
+                awi_value REAL,
+                forecast_rainfall REAL,
+                data_completeness REAL NOT NULL,
+                calculated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS risk_assessments (
+                id TEXT PRIMARY KEY,
+                location_id TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                risk_score REAL,
+                risk_category TEXT NOT NULL,
+                factor_scores TEXT NOT NULL,
+                factor_weights TEXT NOT NULL,
+                missing_factors TEXT NOT NULL,
+                explanation TEXT NOT NULL,
+                assessment_time TEXT NOT NULL,
+                data_sources TEXT NOT NULL,
+                completeness_score REAL NOT NULL,
+                raw_payload TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
         logger.info(f"Initialized SQLite database at {DB_PATH}")
     finally:
@@ -113,5 +172,187 @@ def get_susceptibility_analysis_record(analysis_id: str) -> Optional[Dict[str, A
             "processing_time": row["processing_time"],
             "created_at": row["created_at"],
         }
+    finally:
+        conn.close()
+
+
+def save_weather_observation(obs: Dict[str, Any]) -> None:
+    """Persist a deduplicated weather observation to SQLite."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO weather_observations (
+                id, location_id, latitude, longitude, precipitation,
+                temperature, humidity, wind_speed, weather_code,
+                observation_time, source, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                obs["id"],
+                obs["location_id"],
+                obs["latitude"],
+                obs["longitude"],
+                obs.get("precipitation"),
+                obs.get("temperature"),
+                obs.get("humidity"),
+                obs.get("wind_speed"),
+                obs.get("weather_code"),
+                obs["observation_time"],
+                obs["source"],
+                obs["created_at"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_rainfall_analysis(record: Dict[str, Any]) -> None:
+    """Persist a Phase 3 rainfall analysis record to SQLite."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO rainfall_analyses (
+                id, location_id, rainfall_1h, rainfall_3h, rainfall_6h,
+                rainfall_24h, rainfall_72h, rainfall_7d, rainfall_15d,
+                rainfall_30d, awi_value, forecast_rainfall,
+                data_completeness, calculated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record["id"],
+                record["location_id"],
+                record.get("rainfall_1h"),
+                record.get("rainfall_3h"),
+                record.get("rainfall_6h"),
+                record.get("rainfall_24h"),
+                record.get("rainfall_72h"),
+                record.get("rainfall_7d"),
+                record.get("rainfall_15d"),
+                record.get("rainfall_30d"),
+                record.get("awi_value"),
+                record.get("forecast_rainfall"),
+                record["data_completeness"],
+                record["calculated_at"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_risk_assessment(record: Dict[str, Any]) -> None:
+    """Persist a Phase 3 dynamic risk assessment to SQLite."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO risk_assessments (
+                id, location_id, latitude, longitude, risk_score,
+                risk_category, factor_scores, factor_weights, missing_factors,
+                explanation, assessment_time, data_sources, completeness_score,
+                raw_payload
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record["id"],
+                record["location_id"],
+                record["latitude"],
+                record["longitude"],
+                record.get("risk_score"),
+                record["risk_category"],
+                json.dumps(record.get("factor_scores", {})),
+                json.dumps(record.get("factor_weights", {})),
+                json.dumps(record.get("missing_factors", [])),
+                record["explanation"],
+                record["assessment_time"],
+                json.dumps(record.get("data_sources", [])),
+                record["completeness_score"],
+                json.dumps(record.get("raw_payload", {})),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_latest_risk_by_location(location_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve the latest risk assessment for a location_id."""
+    if not os.path.isfile(DB_PATH):
+        return None
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT raw_payload FROM risk_assessments WHERE location_id = ? ORDER BY assessment_time DESC LIMIT 1",
+            (location_id,),
+        ).fetchone()
+        return json.loads(row["raw_payload"]) if row else None
+    finally:
+        conn.close()
+
+
+def get_risk_by_assessment_id(assessment_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve a specific risk assessment by assessment_id."""
+    if not os.path.isfile(DB_PATH):
+        return None
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT raw_payload FROM risk_assessments WHERE id = ?",
+            (assessment_id,),
+        ).fetchone()
+        return json.loads(row["raw_payload"]) if row else None
+    finally:
+        conn.close()
+
+
+def get_risk_history_by_id_or_location(identifier: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    Retrieve assessment history. If identifier matches an assessment_id, looks up its location_id
+    and returns all historical assessments for that location. Otherwise queries by location_id directly.
+    """
+    if not os.path.isfile(DB_PATH):
+        return []
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT location_id FROM risk_assessments WHERE id = ?",
+            (identifier,),
+        ).fetchone()
+        loc_id = row["location_id"] if row else identifier
+        rows = conn.execute(
+            "SELECT raw_payload FROM risk_assessments WHERE location_id = ? ORDER BY assessment_time DESC LIMIT ?",
+            (loc_id, limit),
+        ).fetchall()
+        return [json.loads(r["raw_payload"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_risk_hotspots(limit: int = 50) -> List[Dict[str, Any]]:
+    """Retrieve latest assessments per location where risk_category is HIGH or CRITICAL."""
+    if not os.path.isfile(DB_PATH):
+        return []
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT raw_payload FROM risk_assessments r1
+            WHERE risk_category IN ('HIGH', 'CRITICAL')
+              AND assessment_time = (
+                  SELECT MAX(r2.assessment_time) FROM risk_assessments r2
+                  WHERE r2.location_id = r1.location_id
+              )
+            ORDER BY risk_score DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [json.loads(r["raw_payload"]) for r in rows]
     finally:
         conn.close()
