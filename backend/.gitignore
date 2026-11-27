@@ -11,6 +11,7 @@ ENV/
 
 # Environment
 .env
+*.db
 
 # Model weights, datasets, uploads and results
 model_weights/*
@@ -29,6 +30,7 @@ tests/*.jpg
 tests/*.jpeg
 tests/*.png
 tests/*.txt
+tests/*.npy
 tests/sample_*
 *.tif
 *.tiff

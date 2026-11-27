@@ -7,7 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
 
 from app.api.satellite_routes import router as satellite_router
+from app.api.susceptibility_routes import router as susceptibility_router
 from app.ml.model_loader import get_model_manager
+from app.db.database import init_db
 
 # Configure logging
 logging.basicConfig(
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
     Checks hardware acceleration and initializes model manager on startup.
     """
     logger.info("Initializing GeoSense Satellite Landslide Detection Backend...")
+    init_db()
     manager = get_model_manager()
     logger.info(f"Target compute device: {manager.device}")
     logger.info(f"Configured Prithvi model repository: {manager.repo_id}")
@@ -72,6 +75,8 @@ app.add_middleware(
 # Include API endpoints at both root and /api prefixes for flexibility and backward compatibility
 app.include_router(satellite_router)
 app.include_router(satellite_router, prefix="/api")
+app.include_router(susceptibility_router)
+app.include_router(susceptibility_router, prefix="/api")
 
 # Static files for results directory
 app.mount("/results", StaticFiles(directory=RESULTS_DIR), name="results")
@@ -93,6 +98,15 @@ async def serve_ui():
 async def serve_ui_alias():
     """Alias for UI dashboard."""
     return await serve_ui()
+
+
+@app.get("/susceptibility-ui", response_class=HTMLResponse, include_in_schema=False)
+async def serve_susceptibility_ui():
+    """Serve the temporary HTML testing web interface for Phase 2 Susceptibility Analysis."""
+    html_file = os.path.join(STATIC_DIR, "susceptibility.html")
+    if os.path.isfile(html_file):
+        return FileResponse(html_file, media_type="text/html")
+    return HTMLResponse("<h1>GeoSense Phase 2 Susceptibility</h1><p>Visit <a href='/docs'>/docs</a></p>")
 
 
 if __name__ == "__main__":

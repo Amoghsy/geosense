@@ -305,3 +305,36 @@ The test suite validates:
 | `Prithvi Model Unavailable` | Checkpoint is currently loading or cannot be accessed. | Check `/model/status` to monitor loading status. |
 | `CUDA out of memory` | GPU memory exhausted during inference. | Set `DEVICE=cpu` in `.env` to execute inference on host CPU. |
 | `RasterioIOError` | Uploaded file is corrupted or not a valid raster. | Ensure the file was completely uploaded and is a valid GeoTIFF format. |
+
+
+---
+
+## 11. Phase 2 — Multimodal Landslide Susceptibility Analysis
+
+Phase 2 integrates the pretrained **Multimodal Late-Fusion** model from [`vinukatashidu/landslide-detection-multimodal`](https://huggingface.co/vinukatashidu/landslide-detection-multimodal) (pinned revision `8e972570b1f896f6fdc14de4d436df496342d3f0`).
+
+### Model Architecture & Actual Task:
+- **Architecture:** Late-Fusion network (`MultimodalLandslideModel`):
+  - **Visual Branch:** Pretrained `ResNet50` on `[B4 (Red), B3 (Green), B2 (Blue)]` (ImageNet normalized) -> `2048-d`
+  - **Physical Branch:** Custom 4-layer `TerrainCNN` on `[B8 (NIR), DEM, Slope]` (`[0, 1]` normalized via `5000`, `3000m`, `90°`) -> `256-d`
+  - **Fusion Head:** MLP (`2304 -> 512 -> 1`) + `torch.sigmoid`
+- **Actual Task:** Pre-event landslide susceptibility / vulnerability binary classification (`Susceptible` if `score >= 0.291`, else `Non-Susceptible`).
+- **Evaluation Metrics (from Model Card):** ROC-AUC `0.7371`, F1 `0.7100`, Recall `91%`, Specificity `46%` (optimal threshold `0.291`).
+
+### Supported Phase 2 Inputs:
+- **6-band GeoTIFF (`.tif`, `.tiff`)** or **6-channel NumPy (`.npy`)** with exact channel order: `[B4 (Red), B3 (Green), B2 (Blue), B8 (NIR), DEM, Slope]`.
+- Standard 3-band RGB photos (JPEG/PNG) and 3-band GeoTIFFs are strictly rejected.
+
+### Phase 2 Endpoints & Testing UI:
+- **Temporary HTML Dashboard:** `http://localhost:8000/susceptibility-ui`
+- `GET /susceptibility/health` — Module health & model load state
+- `GET /susceptibility/model/status` — Device, checkpoint path, supported inputs
+- `GET /susceptibility/model/info` — Architecture, metrics, geographic limitations
+- `POST /susceptibility/analyze` — Run inference on 6-channel `.tif` or `.npy` (supports `region_id` for all 8 North Eastern India states)
+- `GET /susceptibility/analyze/{analysis_id}` — Retrieve analysis JSON (persisted in SQLite `geosense.db`)
+- `GET /susceptibility/analyze/{analysis_id}/map` — Retrieve GeoJSON FeatureCollection (if input had valid CRS/transform)
+- `GET /susceptibility/analyze/{analysis_id}/metadata` — Retrieve full metadata JSON
+
+### Geographic Coverage & Known Limitations:
+- Supports region tagging for Meghalaya, Sikkim, Assam, Arunachal Pradesh, Manipur, Mizoram, Nagaland, and Tripura.
+- **Uncalibrated Prototype:** The pretrained weights are an academic prototype not locally calibrated for North Eastern India and do not incorporate live rainfall or seismic triggers (reserved for Phase 3).

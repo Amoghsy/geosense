@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoSense Phase 2 — Multimodal Landslide Susceptibility</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-subtle: #182234;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --green: #10b981;
+      --blue: #38bdf8;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg-dark); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: rgba(15,23,42,0.9); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .logo { width: 36px; height: 36px; background: linear-gradient(135deg, #f59e0b, #ea580c); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    nav { display: flex; gap: 0.75rem; align-items: center; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.85rem; padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); }
+    nav a.active { background: var(--blue); color: #0f172a; border-color: var(--blue); font-weight: 600; }
+    .badge { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); padding: 0.45rem 0.9rem; border-radius: 9999px; font-size: 0.8rem; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
+    .dot.ready { background: var(--green); }
+    .dot.error { background: var(--red); }
+    .banner { background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid rgba(245, 158, 11, 0.25); padding: 0.65rem 2rem; font-size: 0.82rem; color: #fde68a; text-align: center; }
+    main { flex: 1; max-width: 1300px; width: 100%; margin: 0 auto; padding: 1.75rem 2rem; display: grid; grid-template-columns: 390px 1fr; gap: 1.75rem; }
+    @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.4rem; display: flex; flex-direction: column; gap: 1.1rem; }
+    .panel-title { font-size: 1.05rem; font-weight: 600; }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.35rem; font-weight: 500; }
+    select, input[type="number"], input[type="text"] { width: 100%; background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); padding: 0.55rem 0.75rem; border-radius: 6px; font-size: 0.85rem; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 1.5rem 1rem; text-align: center; background: var(--bg-subtle); position: relative; cursor: pointer; }
+    .dropzone:hover { border-color: var(--blue); }
+    #file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: #0f172a; border: none; padding: 0.8rem 1.25rem; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .alert { padding: 0.8rem; border-radius: 8px; font-size: 0.82rem; display: none; }
+    .alert.visible { display: block; }
+    .alert-err { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; }
+    .alert-warn { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.35); color: #fde68a; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.9rem; }
+    .mcard { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; }
+    .mlabel { font-size: 0.72rem; text-transform: uppercase; color: var(--muted); }
+    .mval { font-size: 1.25rem; font-weight: 700; font-family: var(--mono); margin-top: 0.2rem; }
+    .mval.vuln { color: var(--red); }
+    .mval.safe { color: var(--green); }
+    .tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 0.65rem; }
+    .tab { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.82rem; cursor: pointer; }
+    .tab.active { background: var(--blue); border-color: var(--blue); color: #0f172a; font-weight: 600; }
+    .viewer { background: #000; border: 1px solid var(--border); border-radius: 8px; min-height: 320px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .viewer img { max-width: 100%; max-height: 440px; object-fit: contain; }
+    pre { background: var(--bg-dark); padding: 1rem; font-family: var(--mono); font-size: 0.75rem; color: #a5f3fc; width: 100%; max-height: 360px; overflow: auto; }
+    .dl-row { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .dl { background: var(--bg-subtle); border: 1px solid var(--border); color: var(--text); padding: 0.45rem 0.9rem; border-radius: 6px; text-decoration: none; font-size: 0.82rem; }
+    .dl:hover { border-color: var(--blue); color: var(--blue); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">G2</div>
+      <div>
+        <div style="font-weight:700; font-size:1.15rem;">GeoSense — Phase 2</div>
+        <div style="font-size:0.75rem; color:var(--muted);">Multimodal Landslide Susceptibility (Temporary Testing UI)</div>
+      </div>
+    </div>
+    <nav>
+      <a href="/">Phase 1: Satellite Detection</a>
+      <a href="/susceptibility-ui" class="active">Phase 2: Susceptibility</a>
+      <a href="/docs" target="_blank">Swagger API</a>
+    </nav>
+    <div class="badge">
+      <div id="dot" class="dot"></div>
+      <span id="status-text">Checking Multimodal Model...</span>
+    </div>
+  </header>
+
+  <div class="banner">
+    <strong>Phase 2 Scope & Coverage Notice:</strong> Runs <code>vinukatashidu/landslide-detection-multimodal</code> (ResNet50 + TerrainCNN) on 6-channel [B4, B3, B2, B8, DEM, Slope] inputs. Experimental academic weights — not locally calibrated for North Eastern India or live rainfall (Phase 3).
+  </div>
+
+  <main>
+    <div class="panel">
+      <div class="panel-title">Multimodal Input & Region</div>
+
+      <div>
+        <label for="region">North Eastern India Region</label>
+        <select id="region">
+          <option value="">-- Select State (Optional) --</option>
+          <option value="meghalaya">Meghalaya</option>
+          <option value="sikkim">Sikkim</option>
+          <option value="assam">Assam</option>
+          <option value="arunachal_pradesh">Arunachal Pradesh</option>
+          <option value="manipur">Manipur</option>
+          <option value="mizoram">Mizoram</option>
+          <option value="nagaland">Nagaland</option>
+          <option value="tripura">Tripura</option>
+        </select>
+      </div>
+
+      <div class="row2">
+        <div>
+          <label for="lat">Latitude (Optional)</label>
+          <input type="number" step="0.0001" id="lat" placeholder="e.g. 25.5788">
+        </div>
+        <div>
+          <label for="lon">Longitude (Optional)</label>
+          <input type="number" step="0.0001" id="lon" placeholder="e.g. 91.8933">
+        </div>
+      </div>
+
+      <div>
+        <label for="source">Data Source Attribution</label>
+        <input type="text" id="source" placeholder="e.g. Sentinel-2 L2A + SRTM 30m DEM">
+      </div>
+
+      <div class="dropzone">
+        <input type="file" id="file-input" accept=".tif,.tiff,.npy">
+        <div style="font-size:1.6rem;">🛰️</div>
+        <div style="font-size:0.88rem; font-weight:600; margin-top:0.35rem;">Upload 6-Channel GeoTIFF (.tif) or NumPy (.npy)</div>
+        <div style="font-size:0.74rem; color:var(--muted); margin-top:0.25rem;">Channels: [B4 Red, B3 Green, B2 Blue, B8 NIR, DEM, Slope]</div>
+      </div>
+
+      <div id="file-info" style="font-size:0.8rem; color:var(--blue); display:none;"></div>
+
+      <button id="run-btn" class="btn" disabled>Run Susceptibility Analysis</button>
+
+      <div id="err-box" class="alert alert-err"></div>
+
+      <div style="border-top:1px solid var(--border); padding-top:0.8rem; font-size:0.75rem; color:var(--muted);">
+        <strong>Model Specs:</strong><br>
+        Repo: <code>vinukatashidu/landslide-detection-multimodal</code><br>
+        Optimal Threshold: <code>0.291</code> (High-Recall 91%, ROC-AUC 0.7371)<br>
+        Rejects 3-band RGB photos (missing NIR, DEM, Slope are never fabricated).
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Susceptibility Output & Metadata</div>
+
+      <div id="empty-state" style="text-align:center; padding:4rem 1rem; color:var(--muted); border:2px dashed var(--border); border-radius:10px;">
+        Upload a 6-channel multimodal patch (.tif or .npy) to inspect the model's susceptibility score, terrain preview, and geographic metadata.
+      </div>
+
+      <div id="results" style="display:none; flex-direction:column; gap:1.1rem;">
+        <div class="metrics">
+          <div class="mcard">
+            <div class="mlabel">Susceptibility Class</div>
+            <div id="m-class" class="mval">-</div>
+          </div>
+          <div class="mcard">
+            <div class="mlabel">Susceptibility Score</div>
+            <div id="m-score" class="mval">-</div>
+          </div>
+          <div class="mcard">
+            <div class="mlabel">Raw Logit / Patches</div>
+            <div id="m-logit" class="mval">-</div>
+          </div>
+          <div class="mcard">
+            <div class="mlabel">Latency</div>
+            <div id="m-time" class="mval">-</div>
+          </div>
+        </div>
+
+        <div id="warnings-box" class="alert alert-warn"></div>
+
+        <div style="background:var(--bg-subtle); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem; font-size:0.8rem; display:flex; gap:1.25rem; flex-wrap:wrap;">
+          <div><strong style="color:var(--muted)">Region:</strong> <span id="g-region">-</span></div>
+          <div><strong style="color:var(--muted)">Coords:</strong> <span id="g-coords">-</span></div>
+          <div><strong style="color:var(--muted)">CRS:</strong> <span id="g-crs">-</span></div>
+          <div><strong style="color:var(--muted)">Coverage:</strong> <span id="g-cov">-</span></div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-t="rgb">RGB Preview (B4,B3,B2)</button>
+          <button class="tab" data-t="terrain">Terrain Preview (B8,DEM,Slope)</button>
+          <button class="tab" data-t="geojson" id="tab-geojson" style="display:none;">GeoJSON Map</button>
+          <button class="tab" data-t="json">Full Metadata JSON</button>
+        </div>
+
+        <div class="viewer">
+          <img id="preview-img" alt="Preview">
+          <pre id="json-pre" style="display:none;"></pre>
+        </div>
+
+        <div class="dl-row">
+          <a id="dl-json" class="dl" href="#" download>⬇️ Result Metadata (JSON)</a>
+          <a id="dl-map" class="dl" href="#" download style="display:none;">⬇️ Susceptibility GeoJSON</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const dot = document.getElementById('dot');
+    const statusText = document.getElementById('status-text');
+    const fileInput = document.getElementById('file-input');
+    const fileInfo = document.getElementById('file-info');
+    const runBtn = document.getElementById('run-btn');
+    const errBox = document.getElementById('err-box');
+    const emptyState = document.getElementById('empty-state');
+    const resultsDiv = document.getElementById('results');
+
+    let selectedFile = null;
+    let currentData = null;
+
+    async function checkStatus() {
+      try {
+        const res = await fetch('/susceptibility/model/status');
+        const data = await res.json();
+        if (data.status === 'ready') {
+          dot.className = 'dot ready';
+          statusText.textContent = `Multimodal Ready (${data.device.toUpperCase()})`;
+        } else {
+          dot.className = 'dot';
+          statusText.textContent = `Status: ${data.status}`;
+        }
+      } catch {
+        dot.className = 'dot error';
+        statusText.textContent = 'Phase 2 Offline';
+      }
+    }
+    checkStatus();
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        selectedFile = e.target.files[0];
+        fileInfo.style.display = 'block';
+        fileInfo.textContent = `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`;
+        runBtn.disabled = false;
+        errBox.className = 'alert alert-err';
+      }
+    });
+
+    runBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      runBtn.disabled = true;
+      runBtn.textContent = 'Running Multimodal Inference...';
+      errBox.className = 'alert alert-err';
+
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      const reg = document.getElementById('region').value;
+      const lat = document.getElementById('lat').value;
+      const lon = document.getElementById('lon').value;
+      const src = document.getElementById('source').value;
+      if (reg) fd.append('region_id', reg);
+      if (lat) fd.append('latitude', lat);
+      if (lon) fd.append('longitude', lon);
+      if (src) fd.append('data_source', src);
+
+      try {
+        const res = await fetch('/susceptibility/analyze', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail?.message || data.detail || 'Analysis failed.');
+        render(data);
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.className = 'alert alert-err visible';
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = 'Run Susceptibility Analysis';
+      }
+    });
+
+    function render(d) {
+      currentData = d;
+      emptyState.style.display = 'none';
+      resultsDiv.style.display = 'flex';
+
+      const mClass = document.getElementById('m-class');
+      mClass.textContent = d.prediction.susceptibility_class;
+      mClass.className = d.prediction.is_susceptible ? 'mval vuln' : 'mval safe';
+
+      document.getElementById('m-score').textContent = `${d.prediction.susceptibility_score.toFixed(4)} (thr ${d.prediction.decision_threshold})`;
+      document.getElementById('m-logit').textContent = `${d.prediction.raw_logit.toFixed(3)} / ${d.prediction.tile_count} tile(s)`;
+      document.getElementById('m-time').textContent = `${d.processing_time_seconds}s`;
+
+      const wBox = document.getElementById('warnings-box');
+      if (d.data_quality_warnings && d.data_quality_warnings.length) {
+        wBox.innerHTML = d.data_quality_warnings.map(w => `• ${w}`).join('<br>');
+        wBox.className = 'alert alert-warn visible';
+      } else {
+        wBox.className = 'alert alert-warn';
+      }
+
+      document.getElementById('g-region').textContent = d.geographic.region_name || 'Unspecified';
+      document.getElementById('g-coords').textContent = (d.geographic.latitude != null && d.geographic.longitude != null)
+        ? `${d.geographic.latitude}, ${d.geographic.longitude}` : 'N/A';
+      document.getElementById('g-crs').textContent = d.geographic.crs || 'None';
+      document.getElementById('g-cov').textContent = d.geographic.coverage_status;
+
+      document.getElementById('dl-json').href = d.files.metadata_json;
+      const dlMap = document.getElementById('dl-map');
+      const tabGeo = document.getElementById('tab-geojson');
+      if (d.files.geojson_map) {
+        dlMap.href = d.files.geojson_map;
+        dlMap.style.display = 'inline-block';
+        tabGeo.style.display = 'inline-block';
+      } else {
+        dlMap.style.display = 'none';
+        tabGeo.style.display = 'none';
+      }
+
+      showTab('rgb');
+    }
+
+    document.querySelectorAll('.tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        showTab(btn.dataset.t);
+      });
+    });
+
+    async function showTab(t) {
+      if (!currentData) return;
+      const img = document.getElementById('preview-img');
+      const pre = document.getElementById('json-pre');
+      if (t === 'rgb') {
+        pre.style.display = 'none';
+        img.style.display = 'block';
+        img.src = currentData.files.rgb_preview;
+      } else if (t === 'terrain') {
+        pre.style.display = 'none';
+        img.style.display = 'block';
+        img.src = currentData.files.terrain_preview;
+      } else if (t === 'geojson' && currentData.files.geojson_map) {
+        img.style.display = 'none';
+        pre.style.display = 'block';
+        const r = await fetch(currentData.files.geojson_map);
+        pre.textContent = JSON.stringify(await r.json(), null, 2);
+      } else {
+        img.style.display = 'none';
+        pre.style.display = 'block';
+        pre.textContent = JSON.stringify(currentData, null, 2);
+      }
+    }
+  </script>
+</body>
+</html>
