@@ -1,5 +1,11 @@
 import os
 import logging
+from dotenv import load_dotenv
+
+# Load backend/.env BEFORE importing app modules that read os.getenv() at import time
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
