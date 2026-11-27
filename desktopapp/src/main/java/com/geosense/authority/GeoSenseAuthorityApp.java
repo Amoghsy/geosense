@@ -13,6 +13,8 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.chart.*;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Arc;
@@ -41,7 +43,36 @@ public class GeoSenseAuthorityApp extends Application {
     private static final String BTN_SECONDARY = "-fx-background-color: #FFFFFF; -fx-text-fill: #0F172A; -fx-border-color: #CBD5E1; -fx-border-radius: 8; -fx-background-radius: 8; -fx-padding: 7 12; cursor: hand;";
     private static final String BTN_DANGER = "-fx-background-color: #FEE2E2; -fx-text-fill: #DC2626; -fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 8 14; cursor: hand;";
 
-    private final ApiClient api = new ApiClient("http://localhost:8000");
+    private final ApiClient api = new ApiClient(resolveBackendUrl());
+
+    private static String resolveBackendUrl() {
+        String envVal = System.getenv("GEOSENSE_API_URL");
+        if (envVal != null && !envVal.isBlank()) {
+            return envVal.trim();
+        }
+        String[] candidates = {".env", "desktopapp/.env", "../backend/.env"};
+        for (String path : candidates) {
+            java.io.File f = new java.io.File(path);
+            if (f.isFile()) {
+                try (java.util.Scanner sc = new java.util.Scanner(f, java.nio.charset.StandardCharsets.UTF_8)) {
+                    while (sc.hasNextLine()) {
+                        String line = sc.nextLine().trim();
+                        if (line.isEmpty() || line.startsWith("#")) continue;
+                        if (line.startsWith("GEOSENSE_API_URL=")) {
+                            String val = line.substring("GEOSENSE_API_URL=".length()).trim();
+                            if (!val.isEmpty()) return val;
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return "http://localhost:8000";
+    }
+
+    private Stage primaryStage;
+    private Scene loginScene;
+    private Scene dashboardScene;
 
     private final StackPane contentHost = new StackPane();
     private final Map<String, Button> navButtons = new LinkedHashMap<>();
@@ -68,6 +99,12 @@ public class GeoSenseAuthorityApp extends Application {
     private Label slopeLabel = new Label("--");
     private Canvas dashMapCanvas = new Canvas(480, 260);
     private Canvas monitorMapCanvas = new Canvas(520, 260);
+    private List<String> lastHotspots = new ArrayList<>();
+    private final Map<String, Image> osmTileCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Set<String> osmLoadingTiles = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.net.http.HttpClient tileHttp = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(8))
+            .build();
 
     private final ObservableList<IncidentRow> incidentRows = FXCollections.observableArrayList();
     private final ObservableList<ResourceRow> resourceRows = FXCollections.observableArrayList();
@@ -86,6 +123,7 @@ public class GeoSenseAuthorityApp extends Application {
 
     @Override
     public void start(Stage stage) {
+        this.primaryStage = stage;
         stage.setTitle("GeoSense — Authority Command Center");
 
         BorderPane root = new BorderPane();
@@ -107,15 +145,156 @@ public class GeoSenseAuthorityApp extends Application {
         initPages();
         switchPage("Authority Dashboard", "Real-time landslide intelligence, early warning & coordinated response");
 
-        Scene scene = new Scene(root, 1360, 820);
-        stage.setScene(scene);
-        stage.show();
+        dashboardScene = new Scene(root, 1360, 820);
+        loginScene = buildLoginScene(stage);
 
-        // Prompt login or auto-check channel status
-        runAsync(() -> {
-            String ch = api.getChannelStatus();
-            Platform.runLater(() -> channelStatusLabel.setText("Channels: " + ch));
-        });
+        // Always show Login screen first before entering the Command Center
+        stage.setScene(loginScene);
+        stage.setMinWidth(1024);
+        stage.setMinHeight(700);
+        stage.show();
+    }
+
+    private Scene buildLoginScene(Stage stage) {
+        StackPane rootStack = new StackPane();
+        rootStack.setStyle("-fx-background-color: " + EMERALD_DARK + "; -fx-font-family: 'Segoe UI', system-ui, sans-serif;");
+
+        // Background mountain hero image (matching mobile app)
+        try {
+            Image bgImg = null;
+            var resStream = GeoSenseAuthorityApp.class.getResourceAsStream("/images/officer_hero_bg.jpg");
+            if (resStream != null) {
+                bgImg = new Image(resStream);
+            } else {
+                java.io.File fallbackFile = new java.io.File("src/main/resources/images/officer_hero_bg.jpg");
+                if (fallbackFile.exists()) {
+                    bgImg = new Image(fallbackFile.toURI().toString());
+                }
+            }
+            if (bgImg != null && !bgImg.isError()) {
+                ImageView bgView = new ImageView(bgImg);
+                bgView.setPreserveRatio(false);
+                bgView.fitWidthProperty().bind(rootStack.widthProperty());
+                bgView.fitHeightProperty().bind(rootStack.heightProperty());
+                rootStack.getChildren().add(bgView);
+            }
+        } catch (Exception ignored) {
+            // Fallback to solid emerald background
+        }
+
+        // Dark Emerald / Forest gradient overlay
+        Region overlay = new Region();
+        overlay.setStyle("-fx-background-color: linear-gradient(to bottom, rgba(4, 34, 24, 0.78), rgba(6, 78, 59, 0.70));");
+        rootStack.getChildren().add(overlay);
+
+        VBox wrapper = new VBox(16);
+        wrapper.setAlignment(Pos.CENTER);
+        wrapper.setPadding(new Insets(32));
+
+        VBox card = new VBox(14);
+        card.setMaxWidth(440);
+        card.setPrefWidth(440);
+        card.setPadding(new Insets(28, 30, 28, 30));
+        card.setStyle("-fx-background-color: #FFFFFF; -fx-background-radius: 16; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.28), 24, 0, 0, 8);");
+
+        Label badge = new Label("SDMA AUTHORITY COMMAND CENTER");
+        badge.setStyle("-fx-background-color: #DCFCE7; -fx-text-fill: #065F46; -fx-font-size: 10px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 12;");
+
+        Label title = new Label("GeoSense Authority Sign In");
+        title.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #0F172A;");
+
+        Label subtitle = new Label("Sign in with an authorized Disaster Management Authority account to access live telemetry, incidents, and alert publishing.");
+        subtitle.setWrapText(true);
+        subtitle.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748B;");
+
+        TextField emailField = new TextField("authority@geosense.in");
+        emailField.setPromptText("authority@geosense.in");
+        emailField.setStyle("-fx-padding: 10 12; -fx-background-radius: 8; -fx-border-color: #CBD5E1; -fx-border-radius: 8;");
+
+        PasswordField passField = new PasswordField();
+        passField.setText("password123");
+        passField.setPromptText("Password");
+        passField.setStyle("-fx-padding: 10 12; -fx-background-radius: 8; -fx-border-color: #CBD5E1; -fx-border-radius: 8;");
+
+        Label errorLabel = new Label();
+        errorLabel.setWrapText(true);
+        errorLabel.setVisible(false);
+        errorLabel.setManaged(false);
+        errorLabel.setStyle("-fx-background-color: #FEE2E2; -fx-text-fill: #B91C1C; -fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 10 12; -fx-background-radius: 8;");
+
+        Button signInBtn = new Button("Sign In to Command Center");
+        signInBtn.setMaxWidth(Double.MAX_VALUE);
+        signInBtn.setStyle(BTN_PRIMARY + " -fx-padding: 12 16; -fx-font-size: 14px;");
+
+        Runnable doLogin = () -> {
+            String email = emailField.getText().trim();
+            String pass = passField.getText();
+            if (email.isEmpty() || pass.isEmpty()) {
+                errorLabel.setText("Please enter your email/ID and password.");
+                errorLabel.setVisible(true);
+                errorLabel.setManaged(true);
+                return;
+            }
+            errorLabel.setVisible(false);
+            errorLabel.setManaged(false);
+            signInBtn.setDisable(true);
+            signInBtn.setText("Signing in...");
+
+            new Thread(() -> {
+                try {
+                    String resp = api.login(email, pass);
+                    String role = ApiClient.extractJsonString(resp, "role");
+                    String fullName = ApiClient.extractJsonString(resp, "full_name");
+                    if (!"AUTHORITY".equalsIgnoreCase(role) && !"ADMIN".equalsIgnoreCase(role)) {
+                        api.clearToken();
+                        throw new RuntimeException("Access denied: role '" + role + "' cannot access Authority Command Center.");
+                    }
+                    String ch = api.getChannelStatus();
+                    Platform.runLater(() -> {
+                        String displayName = fullName.isEmpty() ? email : fullName;
+                        userNameLabel.setText(displayName);
+                        userRoleLabel.setText(role);
+                        String[] parts = displayName.trim().split("\\s+");
+                        String initials = parts.length >= 2
+                                ? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+                                : displayName.substring(0, Math.min(2, displayName.length())).toUpperCase();
+                        userAvatarLabel.setText(initials);
+                        channelStatusLabel.setText("Channels: " + ch);
+                        signInBtn.setDisable(false);
+                        signInBtn.setText("Sign In to Command Center");
+                        stage.setScene(dashboardScene);
+                    });
+                    refreshAllData();
+                } catch (Exception ex) {
+                    Platform.runLater(() -> {
+                        errorLabel.setText("Login failed: " + ex.getMessage());
+                        errorLabel.setVisible(true);
+                        errorLabel.setManaged(true);
+                        signInBtn.setDisable(false);
+                        signInBtn.setText("Sign In to Command Center");
+                    });
+                }
+            }).start();
+        };
+
+        signInBtn.setOnAction(e -> doLogin.run());
+        passField.setOnAction(e -> doLogin.run());
+
+        Label footerNote = new Label("Meghalaya State Disaster Management Authority • GeoSense");
+        footerNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #94A3B8; -fx-padding: 6 0 0 0;");
+
+        card.getChildren().addAll(
+                badge, title, subtitle,
+                new Label("Authority Email or ID") {{ setStyle("-fx-font-size:12px; -fx-font-weight:bold; -fx-text-fill:#334155;"); }}, emailField,
+                new Label("Password") {{ setStyle("-fx-font-size:12px; -fx-font-weight:bold; -fx-text-fill:#334155;"); }}, passField,
+                errorLabel,
+                signInBtn,
+                footerNote
+        );
+
+        wrapper.getChildren().add(card);
+        rootStack.getChildren().add(wrapper);
+        return new Scene(rootStack, 1360, 820);
     }
 
     private VBox buildSidebar(Stage stage) {
@@ -202,23 +381,46 @@ public class GeoSenseAuthorityApp extends Application {
 
         Label clock = new Label(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm")));
         clock.setStyle("-fx-text-fill: #FFFFFF; -fx-font-weight: bold; -fx-font-size: 12px;");
+        clock.setMinWidth(Region.USE_PREF_SIZE);
         Label livePill = new Label("● LIVE");
         livePill.setStyle("-fx-background-color: #10B981; -fx-text-fill: #FFFFFF; -fx-font-size: 10px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 12;");
+        livePill.setMinWidth(Region.USE_PREF_SIZE);
 
-        Button connectBtn = new Button("Connect / Login");
-        connectBtn.setStyle("-fx-background-color: #FFFFFF; -fx-text-fill: #053324; -fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 6 12;");
-        connectBtn.setOnAction(e -> showAuthDialog());
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setStyle("-fx-background-color: #FFFFFF; -fx-text-fill: #053324; -fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 6 12; cursor: hand;");
+        refreshBtn.setMinWidth(Region.USE_PREF_SIZE);
+        refreshBtn.setOnAction(e -> runAsync(this::refreshAllData));
 
-        userAvatarLabel = new Label("AK");
-        userAvatarLabel.setStyle("-fx-background-color: #0D8A5E; -fx-text-fill: #FFFFFF; -fx-font-weight: bold; -fx-padding: 8 10; -fx-background-radius: 20;");
-        userNameLabel = new Label("Sign In");
+        Button signOutBtn = new Button("Sign Out");
+        signOutBtn.setStyle("-fx-background-color: rgba(255,255,255,0.16); -fx-text-fill: #FFFFFF; -fx-font-weight: bold; -fx-background-radius: 8; -fx-padding: 6 12; cursor: hand;");
+        signOutBtn.setMinWidth(Region.USE_PREF_SIZE);
+        signOutBtn.setOnAction(e -> {
+            api.clearToken();
+            stage.setScene(loginScene);
+        });
+
+        userAvatarLabel = new Label("SD");
+        userAvatarLabel.setStyle("-fx-background-color: #0D8A5E; -fx-text-fill: #FFFFFF; -fx-font-weight: bold; -fx-font-size: 12px; -fx-background-radius: 18;");
+        userAvatarLabel.setPrefSize(34, 34);
+        userAvatarLabel.setMinSize(34, 34);
+        userAvatarLabel.setMaxSize(34, 34);
+        userAvatarLabel.setAlignment(Pos.CENTER);
+
+        userNameLabel = new Label("SDMA Director");
         userNameLabel.setStyle("-fx-text-fill: #FFFFFF; -fx-font-weight: bold; -fx-font-size: 12px;");
-        userRoleLabel = new Label("Authority");
+        userNameLabel.setMinWidth(Region.USE_PREF_SIZE);
+        userRoleLabel = new Label("AUTHORITY");
         userRoleLabel.setStyle("-fx-text-fill: #A7F3D0; -fx-font-size: 10px;");
+        userRoleLabel.setMinWidth(Region.USE_PREF_SIZE);
         VBox userInfo = new VBox(1, userNameLabel, userRoleLabel);
+        userInfo.setAlignment(Pos.CENTER_LEFT);
+        userInfo.setMinWidth(Region.USE_PREF_SIZE);
+        userInfo.setMaxHeight(Region.USE_PREF_SIZE);
 
-        HBox right = new HBox(12, clock, livePill, connectBtn, userAvatarLabel, userInfo);
+        HBox right = new HBox(10, clock, livePill, refreshBtn, signOutBtn, userAvatarLabel, userInfo);
         right.setAlignment(Pos.CENTER_RIGHT);
+        right.setMinWidth(Region.USE_PREF_SIZE);
+        right.setMaxHeight(Region.USE_PREF_SIZE);
 
         HBox banner = new HBox(16, left, spacer, right);
         banner.setAlignment(Pos.CENTER_LEFT);
@@ -313,6 +515,7 @@ public class GeoSenseAuthorityApp extends Application {
 
         Button runBtn = new Button("Assess Shillong (Live Open-Meteo)");
         runBtn.setStyle(BTN_PRIMARY);
+        runBtn.setMaxWidth(Double.MAX_VALUE);
         runBtn.setOnAction(e -> runAsync(() -> {
             String res = api.analyzeRisk(25.5788, 91.8933, "Shillong, Meghalaya", 1496, 28);
             double score = Double.parseDouble(ApiClient.extractJsonNumber(res, "risk_score"));
@@ -337,30 +540,44 @@ public class GeoSenseAuthorityApp extends Application {
         riskTrendChart = new LineChart<>(xAx, yAx);
         riskTrendChart.setPrefHeight(200);
         riskTrendChart.setLegendVisible(false);
-        VBox trendCard = new VBox(8, new Label("Risk trend") {{ setStyle("-fx-font-weight:bold; -fx-font-size:14px;"); }}, riskTrendChart);
+        riskTrendChart.setAnimated(false);
+        VBox trendCard = new VBox(8, new Label("Risk trend (Cherrapunji)") {{ setStyle("-fx-font-weight:bold; -fx-font-size:14px;"); }}, riskTrendChart);
         trendCard.setStyle(CARD_STYLE);
         HBox.setHgrow(trendCard, Priority.ALWAYS);
 
         VBox recentCard = new VBox(8, new Label("Recent incidents") {{ setStyle("-fx-font-weight:bold; -fx-font-size:14px;"); }}, recentIncidentsBox);
         recentCard.setStyle(CARD_STYLE);
-        recentCard.setPrefWidth(340);
+        recentCard.setPrefWidth(320);
+        recentCard.setMinWidth(280);
 
         Button qaWarn = new Button("Issue warning"); qaWarn.setStyle(BTN_SECONDARY);
+        qaWarn.setMaxWidth(Double.MAX_VALUE); qaWarn.setMinWidth(Region.USE_PREF_SIZE);
         qaWarn.setOnAction(e -> switchPage("Alerts & Communication", "Review risk alerts, approve public advisories & track Email + FCM delivery"));
+
         Button qaOps = new Button("Deploy officer"); qaOps.setStyle(BTN_SECONDARY);
+        qaOps.setMaxWidth(Double.MAX_VALUE); qaOps.setMinWidth(Region.USE_PREF_SIZE);
         qaOps.setOnAction(e -> switchPage("Field Operations", "Coordinate field officers, deploy response teams & monitor inspections"));
+
         Button qaRes = new Button("Allocate relief"); qaRes.setStyle(BTN_SECONDARY);
+        qaRes.setMaxWidth(Double.MAX_VALUE); qaRes.setMinWidth(Region.USE_PREF_SIZE);
         qaRes.setOnAction(e -> switchPage("Resources & Shelter", "Maintain shelter readiness, verify medical assets & coordinate relief"));
+
         Button qaRep = new Button("Generate report"); qaRep.setStyle(BTN_PRIMARY);
+        qaRep.setMaxWidth(Double.MAX_VALUE); qaRep.setMinWidth(Region.USE_PREF_SIZE);
         qaRep.setOnAction(e -> switchPage("Reports & Analytics", "Evaluate district exposure, response outcomes & generate situation reports"));
 
         GridPane qaGrid = new GridPane();
-        qaGrid.setHgap(8); qaGrid.setVgap(8);
+        qaGrid.setHgap(10); qaGrid.setVgap(10);
+        ColumnConstraints col1 = new ColumnConstraints(); col1.setPercentWidth(50);
+        ColumnConstraints col2 = new ColumnConstraints(); col2.setPercentWidth(50);
+        qaGrid.getColumnConstraints().addAll(col1, col2);
         qaGrid.add(qaWarn, 0, 0); qaGrid.add(qaOps, 1, 0);
         qaGrid.add(qaRes, 0, 1); qaGrid.add(qaRep, 1, 1);
+
         VBox qaCard = new VBox(10, new Label("Quick actions") {{ setStyle("-fx-font-weight:bold; -fx-font-size:14px;"); }}, qaGrid);
         qaCard.setStyle(CARD_STYLE);
-        qaCard.setPrefWidth(280);
+        qaCard.setPrefWidth(330);
+        qaCard.setMinWidth(310);
 
         HBox bottomRow = new HBox(16, trendCard, recentCard, qaCard);
         return new VBox(16, kpis, middleRow, bottomRow);
@@ -636,11 +853,33 @@ public class GeoSenseAuthorityApp extends Application {
         String audJson = api.getAuditLogs();
         String hsJson = api.getGisHotspots();
 
+        String trendsJson = "";
+        try {
+            trendsJson = api.getRiskTrends("loc_25.270_91.732");
+        } catch (Exception ignored) {}
+
+        String latestHotspotRisk = "";
+        try {
+            latestHotspotRisk = api.request("GET", "/risk/loc_25.285_91.721", null);
+        } catch (Exception ignored) {}
+
         List<String> incObjs = ApiClient.splitJsonObjectsInArray(incsJson, "incidents");
         List<String> resObjs = ApiClient.splitJsonObjectsInArray(resJson, "resources");
         List<String> alertObjs = ApiClient.splitJsonObjectsInArray(alertsJson, "alerts");
         List<String> inspObjs = ApiClient.splitJsonObjectsInArray(inspJson, "inspections");
         List<String> hsObjs = ApiClient.splitJsonObjectsInArray(hsJson, "hotspots");
+        List<String> trendPts = trendsJson.isEmpty() ? List.of() : ApiClient.splitJsonObjectsInArray(trendsJson, "timeline");
+
+        // Sum state distribution counts from /authority/analytics
+        int modCount = 0;
+        int lowCount = 0;
+        var modMatcher = java.util.regex.Pattern.compile("\"MODERATE\"\\s*:\\s*(\\d+)").matcher(analytics);
+        while (modMatcher.find()) modCount += Integer.parseInt(modMatcher.group(1));
+        var lowMatcher = java.util.regex.Pattern.compile("\"LOW\"\\s*:\\s*(\\d+)").matcher(analytics);
+        while (lowMatcher.find()) lowCount += Integer.parseInt(lowMatcher.group(1));
+        final int finalModCount = modCount;
+        final int finalLowCount = lowCount;
+        final String finalLatestRisk = latestHotspotRisk;
 
         Platform.runLater(() -> {
             int high = Integer.parseInt(ApiClient.extractJsonNumber(dash, "high_risk_locations"));
@@ -648,12 +887,38 @@ public class GeoSenseAuthorityApp extends Application {
             int totalRisk = Integer.parseInt(ApiClient.extractJsonNumber(dash, "total_risk_assessments"));
             int pendingInc = Integer.parseInt(ApiClient.extractJsonNumber(dash, "pending"));
             kpiHighRisk.setText(String.valueOf(high + crit));
-            kpiModRisk.setText(String.valueOf(Math.max(0, totalRisk - high - crit)));
-            kpiLowRisk.setText(String.valueOf(totalRisk));
+            kpiModRisk.setText(String.valueOf(finalModCount));
+            kpiLowRisk.setText(String.valueOf(finalLowCount));
             kpiActiveInc.setText(ApiClient.extractJsonNumber(dash, "total"));
             kpiShelters.setText(ApiClient.extractJsonNumber(dash, "verified_resources"));
             incidentBadge.setText(String.valueOf(pendingInc));
             syncLabel.setText("Last sync: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+
+            if (!finalLatestRisk.isEmpty()) {
+                double score = Double.parseDouble(ApiClient.extractJsonNumber(finalLatestRisk, "risk_score"));
+                String locName = ApiClient.extractJsonString(finalLatestRisk, "location_name");
+                String explain = ApiClient.extractJsonString(finalLatestRisk, "explanation");
+                String r24 = ApiClient.extractJsonNumber(finalLatestRisk, "rainfall_24h_mm");
+                String slope = ApiClient.extractJsonNumber(finalLatestRisk, "slope_deg");
+                gaugeScoreLabel.setText(String.format("%.0f", score));
+                gaugeArc.setLength(-(score / 100.0) * 360.0);
+                rain24Label.setText(("0".equals(r24) ? "--" : r24) + " mm");
+                slopeLabel.setText(("0".equals(slope) ? "--" : slope + "°") + (locName.isEmpty() ? "" : " (" + locName + ")"));
+                if (!explain.isEmpty()) xaiWhyLabel.setText(explain);
+            }
+
+            riskTrendChart.getData().clear();
+            if (!trendPts.isEmpty()) {
+                XYChart.Series<String, Number> ts = new XYChart.Series<>();
+                int startIdx = Math.max(0, trendPts.size() - 6);
+                for (int i = startIdx; i < trendPts.size(); i++) {
+                    double sc = Double.parseDouble(ApiClient.extractJsonNumber(trendPts.get(i), "risk_score"));
+                    String tStr = ApiClient.extractJsonString(trendPts.get(i), "assessment_time");
+                    String lbl = tStr.length() >= 16 ? tStr.substring(5, 10) + " " + tStr.substring(11, 16) : "T" + (i + 1);
+                    ts.getData().add(new XYChart.Data<>(lbl, sc));
+                }
+                riskTrendChart.getData().add(ts);
+            }
 
             incidentRows.clear();
             recentIncidentsBox.getChildren().clear();
@@ -708,6 +973,7 @@ public class GeoSenseAuthorityApp extends Application {
                 ));
             }
 
+            lastHotspots = hsObjs;
             drawMapCanvas(dashMapCanvas, hsObjs);
             drawMapCanvas(monitorMapCanvas, hsObjs);
             auditLogArea.setText(audJson);
@@ -722,36 +988,141 @@ public class GeoSenseAuthorityApp extends Application {
         });
     }
 
+    private static double lonToTileX(double lon, int zoom) {
+        return (lon + 180.0) / 360.0 * (1 << zoom);
+    }
+
+    private static double latToTileY(double lat, int zoom) {
+        double rad = Math.toRadians(lat);
+        return (1.0 - Math.log(Math.tan(rad) + 1.0 / Math.cos(rad)) / Math.PI) / 2.0 * (1 << zoom);
+    }
+
+    private void fetchOsmTileAsync(int z, int x, int y) {
+        String key = z + "/" + x + "/" + y;
+        if (osmTileCache.containsKey(key) || !osmLoadingTiles.add(key)) return;
+        String url = "https://tile.openstreetmap.org/" + z + "/" + x + "/" + y + ".png";
+        new Thread(() -> {
+            try {
+                var req = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(url))
+                        .header("User-Agent", "GeoSense-Authority-Desktop/1.0")
+                        .timeout(java.time.Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+                var resp = tileHttp.send(req, java.net.http.HttpResponse.BodyHandlers.ofInputStream());
+                if (resp.statusCode() == 200) {
+                    Image tile = new Image(resp.body());
+                    if (!tile.isError()) {
+                        osmTileCache.put(key, tile);
+                        Platform.runLater(() -> {
+                            drawMapCanvas(dashMapCanvas, lastHotspots);
+                            drawMapCanvas(monitorMapCanvas, lastHotspots);
+                        });
+                    }
+                }
+            } catch (Exception ignored) {
+            } finally {
+                osmLoadingTiles.remove(key);
+            }
+        }).start();
+    }
+
     private void drawMapCanvas(Canvas canvas, List<String> hotspots) {
         GraphicsContext gc = canvas.getGraphicsContext2D();
         double w = canvas.getWidth(), h = canvas.getHeight();
         gc.setFill(Color.web("#E2EAE5"));
         gc.fillRoundRect(0, 0, w, h, 10, 10);
 
-        // Subtle GIS grid lines
-        gc.setStroke(Color.web("#CBD5E1"));
-        gc.setLineWidth(1);
-        for (int x = 40; x < w; x += 60) gc.strokeLine(x, 0, x, h);
-        for (int y = 40; y < h; y += 60) gc.strokeLine(0, y, w, y);
+        // Web Mercator OpenStreetMap centered on Meghalaya / East Khasi Hills
+        int zoom = 9;
+        double centerLat = 25.43;
+        double centerLon = 91.75;
+        double centerX = lonToTileX(centerLon, zoom);
+        double centerY = latToTileY(centerLat, zoom);
 
-        // Illustrative NE India region bounding polygon + Shillong marker
-        gc.setFill(Color.web("#9CC5A9", 0.55));
-        gc.setStroke(Color.web("#FFFFFF"));
-        gc.setLineWidth(2);
-        gc.fillPolygon(new double[]{60, 180, 320, 420, 380, 140}, new double[]{140, 80, 70, 130, 210, 200}, 6);
-        gc.strokePolygon(new double[]{60, 180, 320, 420, 380, 140}, new double[]{140, 80, 70, 130, 210, 200}, 6);
+        double topLeftTileX = centerX - (w / 2.0) / 256.0;
+        double topLeftTileY = centerY - (h / 2.0) / 256.0;
+        int minTx = (int) Math.floor(topLeftTileX);
+        int maxTx = (int) Math.floor(centerX + (w / 2.0) / 256.0);
+        int minTy = (int) Math.floor(topLeftTileY);
+        int maxTy = (int) Math.floor(centerY + (h / 2.0) / 256.0);
+        int maxIdx = (1 << zoom) - 1;
 
-        gc.setFill(Color.web("#0F172A"));
-        gc.fillOval(235, 135, 6, 6);
-        gc.fillText("SHILLONG", 245, 142);
-
-        // Plot real hotspots
-        gc.setFill(Color.web("#DC2626"));
-        for (int i = 0; i < hotspots.size(); i++) {
-            double px = 120 + (i * 45) % (w - 160);
-            double py = 100 + (i * 30) % (h - 140);
-            gc.fillOval(px, py, 12, 12);
+        boolean anyTile = false;
+        for (int tx = minTx; tx <= maxTx; tx++) {
+            for (int ty = minTy; ty <= maxTy; ty++) {
+                if (tx < 0 || tx > maxIdx || ty < 0 || ty > maxIdx) continue;
+                String key = zoom + "/" + tx + "/" + ty;
+                Image tile = osmTileCache.get(key);
+                double drawX = w / 2.0 + (tx - centerX) * 256.0;
+                double drawY = h / 2.0 + (ty - centerY) * 256.0;
+                if (tile != null) {
+                    gc.drawImage(tile, drawX, drawY, 256, 256);
+                    anyTile = true;
+                } else {
+                    fetchOsmTileAsync(zoom, tx, ty);
+                }
+            }
         }
+
+        if (!anyTile) {
+            gc.setStroke(Color.web("#CBD5E1"));
+            gc.setLineWidth(1);
+            for (int x = 40; x < w; x += 60) gc.strokeLine(x, 0, x, h);
+            for (int y = 40; y < h; y += 60) gc.strokeLine(0, y, w, y);
+        }
+
+        // Plot unique hotspots at exact OpenStreetMap Web Mercator coordinates
+        List<double[]> placedLabels = new ArrayList<>();
+        Set<String> seenNames = new HashSet<>();
+
+        for (int i = 0; i < hotspots.size(); i++) {
+            String hObj = hotspots.get(i);
+            String name = ApiClient.extractJsonString(hObj, "location_name");
+            if (name.isEmpty() || !seenNames.add(name)) continue;
+            String cat = ApiClient.extractJsonString(hObj, "risk_category");
+            var coordM = java.util.regex.Pattern.compile("\"coordinates\"\\s*:\\s*\\[\\s*(-?\\d+(?:\\.\\d+)?)\\s*,\\s*(-?\\d+(?:\\.\\d+)?)\\s*\\]").matcher(hObj);
+            if (!coordM.find()) continue;
+
+            double lon = Double.parseDouble(coordM.group(1));
+            double lat = Double.parseDouble(coordM.group(2));
+            double px = w / 2.0 + (lonToTileX(lon, zoom) - centerX) * 256.0;
+            double py = h / 2.0 + (latToTileY(lat, zoom) - centerY) * 256.0;
+            if (px < 10 || px > w - 10 || py < 10 || py > h - 10) continue;
+
+            gc.setFill(Color.web("#FFFFFF"));
+            gc.fillOval(px - 7, py - 7, 14, 14);
+            gc.setFill("HIGH".equalsIgnoreCase(cat) ? Color.web("#EA580C") : Color.web("#DC2626"));
+            gc.fillOval(px - 5, py - 5, 10, 10);
+
+            double lx = px + 9;
+            double ly = py + 4;
+            for (int attempt = 0; attempt < 8; attempt++) {
+                boolean collides = false;
+                for (double[] box : placedLabels) {
+                    if (Math.abs(lx - box[0]) < 120 && Math.abs(ly - box[1]) < 18) {
+                        collides = true;
+                        break;
+                    }
+                }
+                if (!collides) break;
+                ly = (attempt % 2 == 0) ? py + 18 + (attempt / 2) * 18 : py - 14 - (attempt / 2) * 18;
+            }
+            lx = Math.max(8, Math.min(w - 148, lx));
+            ly = Math.max(16, Math.min(h - 10, ly));
+            placedLabels.add(new double[]{lx, ly});
+
+            gc.setFill(Color.web("#FFFFFF", 0.90));
+            gc.fillRoundRect(lx - 3, ly - 11, Math.min(145, name.length() * 6.5 + 8), 15, 4, 4);
+            gc.setFill(Color.web("#0F172A"));
+            gc.fillText(name, lx, ly);
+        }
+
+        // OSM Attribution badge
+        gc.setFill(Color.web("#FFFFFF", 0.85));
+        gc.fillRoundRect(w - 132, h - 18, 128, 15, 4, 4);
+        gc.setFill(Color.web("#475569"));
+        gc.fillText("© OpenStreetMap", w - 126, h - 7);
     }
 
     private VBox makeKpiCard(String title, Label valLbl, String accentHex, String sub) {

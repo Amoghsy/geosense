@@ -35,8 +35,9 @@ export function SafetyOutlookScreen() {
         const locId = risk?.location_id || curW?.location_id;
         if (locId) {
           const trends = await geoSenseApi.getLocationTrends(locId).catch(() => null);
-          if (active && trends?.trend_points?.length) {
-            const pts = trends.trend_points.slice(-4).map((p: any, idx: number, arr: any[]) => ({
+          const timeline = trends?.timeline || trends?.trend_points;
+          if (active && timeline?.length) {
+            const pts = timeline.slice(-4).map((p: any, idx: number, arr: any[]) => ({
               label: idx === arr.length - 1 ? 'Now' : `T-${arr.length - 1 - idx}`,
               score: Math.round(Number(p.risk_score ?? 0)),
             }));

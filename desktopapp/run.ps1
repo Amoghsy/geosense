@@ -6,6 +6,9 @@ $cp = @(
 ) -join ";"
 
 New-Item -ItemType Directory -Force -Path "out" | Out-Null
+if (Test-Path "src/main/resources") {
+    Copy-Item -Path "src/main/resources/*" -Destination "out" -Recurse -Force
+}
 javac -encoding UTF-8 --module-path $cp --add-modules javafx.controls,javafx.graphics -d out src/main/java/com/geosense/authority/*.java
 if ($LASTEXITCODE -eq 0) {
     java --module-path $cp --add-modules javafx.controls,javafx.graphics -cp out com.geosense.authority.GeoSenseAuthorityApp

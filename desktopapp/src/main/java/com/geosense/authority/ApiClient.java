@@ -22,6 +22,7 @@ public class ApiClient {
     public ApiClient(String baseUrl) {
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.http = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
     }
@@ -36,6 +37,10 @@ public class ApiClient {
 
     public String getToken() {
         return jwtToken;
+    }
+
+    public void clearToken() {
+        this.jwtToken = null;
     }
 
     public String request(String method, String path, String jsonBody) throws Exception {
