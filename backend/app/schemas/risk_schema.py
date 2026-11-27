@@ -108,3 +108,73 @@ class RiskHotspotsResponse(BaseModel):
     count: int
     categories_included: List[str]
     hotspots: List[Dict[str, Any]]
+
+
+# ==========================================
+# Phase 5: XAI & Risk Trend Schemas
+# ==========================================
+
+class FactorContributionDetail(BaseModel):
+    factor_key: str
+    factor_label: str
+    availability_status: str
+    status_label: str
+    direction: str
+    raw_value: Optional[Any] = None
+    normalized_score: Optional[float] = None
+    configured_weight: float
+    effective_weight: float
+    contribution_points: Optional[float] = None
+    data_source: Optional[str] = None
+    data_timestamp: Optional[str] = None
+    is_stale: Optional[bool] = None
+
+
+class DetailedRiskExplanationResponse(BaseModel):
+    assessment_id: str
+    location_id: str
+    location_name: Optional[str] = None
+    risk_score: Optional[float] = None
+    risk_category: str
+    is_calibrated_probability: bool = False
+    completeness_score: float
+    increasing_factors: List[str]
+    reducing_factors: List[str]
+    unavailable_factors: List[str]
+    factor_contributions: List[FactorContributionDetail]
+    missing_factors: List[str]
+    data_freshness: Dict[str, Any]
+    explanation: str
+    scientific_disclaimer: str
+    assessment_time: str
+
+
+class ContributingFactorsResponse(BaseModel):
+    assessment_id: str
+    location_id: str
+    risk_score: Optional[float] = None
+    risk_category: str
+    factors: List[FactorContributionDetail]
+
+
+class RiskTrendsResponse(BaseModel):
+    location_id: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    assessment_count: int
+    insufficient_history: bool
+    message: str
+    timeline: List[Dict[str, Any]]
+    category_changes: List[Dict[str, Any]]
+    significant_shifts: List[Dict[str, Any]]
+
+
+class RiskComparisonResponse(BaseModel):
+    location_id: str
+    assessment_1: Dict[str, Any]
+    assessment_2: Dict[str, Any]
+    score_delta: Optional[float] = None
+    category_changed: bool
+    factor_deltas: List[Dict[str, Any]]
+    rainfall_deltas: Dict[str, Optional[float]]
+    comparison_explanation: str

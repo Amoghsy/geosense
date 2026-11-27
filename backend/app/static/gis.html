@@ -62,6 +62,7 @@
       <a href="/susceptibility-ui">Phase 2: Susceptibility</a>
       <a href="/risk-ui">Phase 3: Dynamic Risk</a>
       <a href="/gis-ui" class="active">Phase 4: GIS Map</a>
+      <a href="/xai-ui">Phase 5: XAI & Trends</a>
       <a href="/docs" target="_blank">Swagger API</a>
     </nav>
   </header>
@@ -283,6 +284,23 @@
       const risk = d.dynamic_risk;
       const susc = d.susceptibility;
       const p1 = d.satellite_detections;
+      let xaiHtml = '';
+      if (risk && risk.assessment_id) {
+        try {
+          const expRes = await fetch(`/risk/${risk.assessment_id}/explanation`);
+          if (expRes.ok) {
+            const exp = await expRes.json();
+            const topF = exp.factor_contributions.filter(f => f.contribution_points !== null).slice(0, 3)
+              .map(f => `${f.factor_label}: +${f.contribution_points} pts (${f.status_label})`).join('<br>');
+            xaiHtml = `
+              <hr style="border-color:var(--border);margin:0.4rem 0;">
+              <div><strong>XAI Explanation:</strong><br><span style="font-size:0.74rem;color:var(--muted);">${exp.explanation}</span></div>
+              <div style="margin-top:0.35rem;font-size:0.74rem;"><strong>Top Factors:</strong><br>${topF}</div>
+              <a href="/xai-ui?location_id=${encodeURIComponent(risk.location_id)}&assessment_id=${encodeURIComponent(risk.assessment_id)}" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:0.5rem;">View XAI & Trends →</a>
+            `;
+          }
+        } catch {}
+      }
       box.innerHTML = `
         <div><strong>Coordinates:</strong> ${d.latitude.toFixed(4)}, ${d.longitude.toFixed(4)}</div>
         <div><strong>State:</strong> ${d.state || 'Outside NE India ADM1'}</div>
@@ -291,7 +309,7 @@
         <div><strong>Susceptibility (Phase 2):</strong> ${susc ? `${susc.susceptibility_class} (${susc.susceptibility_score})` : 'Unavailable'}</div>
         <div><strong>Satellite Detections (Phase 1):</strong> ${p1.length ? `${p1.length} feature(s)` : 'Unavailable'}</div>
         <div><strong>Updated:</strong> ${risk?.timestamp || susc?.timestamp || 'N/A'}</div>
-        ${extraProps ? `<pre style="margin-top:0.4rem;white-space:pre-wrap;font-size:0.7rem;color:#a5f3fc;">${JSON.stringify(extraProps, null, 2)}</pre>` : ''}
+        ${xaiHtml}
       `;
     }
 

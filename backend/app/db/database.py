@@ -168,6 +168,21 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS risk_explanations (
+                assessment_id TEXT PRIMARY KEY,
+                location_id TEXT NOT NULL,
+                factor_contributions_json TEXT NOT NULL,
+                increasing_factors_json TEXT NOT NULL,
+                reducing_factors_json TEXT NOT NULL,
+                unavailable_factors_json TEXT NOT NULL,
+                explanation_text TEXT NOT NULL,
+                data_reliability_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
         logger.info(f"Initialized SQLite database at {DB_PATH}")
     finally:
@@ -421,6 +436,75 @@ def get_risk_hotspots(limit: int = 50) -> List[Dict[str, Any]]:
             """,
             (limit,),
         ).fetchall()
+        return [json.loads(r["raw_payload"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def save_risk_explanation(record: Dict[str, Any]) -> None:
+    """Persist structured Phase 5 XAI explanation for an assessment."""
+    init_db()
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO risk_explanations (
+                assessment_id, location_id, factor_contributions_json,
+                increasing_factors_json, reducing_factors_json,
+                unavailable_factors_json, explanation_text,
+                data_reliability_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                record["assessment_id"],
+                record["location_id"],
+                json.dumps(record["factor_contributions"]),
+                json.dumps(record["increasing_factors"]),
+                json.dumps(record["reducing_factors"]),
+                json.dumps(record["unavailable_factors"]),
+                record["explanation_text"],
+                json.dumps(record["data_reliability"]),
+                record["created_at"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_risk_assessments_chronological(
+    location_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """Retrieve stored risk assessments for a location in chronological (ASC) order."""
+    if not os.path.isfile(DB_PATH):
+        return []
+    conn = get_db_connection()
+    try:
+        # Support passing either location_id or an assessment_id
+        row = conn.execute(
+            "SELECT location_id FROM risk_assessments WHERE id = ?",
+            (location_id,),
+        ).fetchone()
+        loc_id = row["location_id"] if row else location_id
+
+        clauses = ["location_id = ?"]
+        params: List[Any] = [loc_id]
+        if start_date:
+            clauses.append("assessment_time >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append("assessment_time <= ?")
+            params.append(end_date)
+        params.append(limit)
+
+        sql = (
+            f"SELECT raw_payload FROM risk_assessments WHERE {' AND '.join(clauses)} "
+            "ORDER BY assessment_time ASC LIMIT ?"
+        )
+        rows = conn.execute(sql, tuple(params)).fetchall()
         return [json.loads(r["raw_payload"]) for r in rows]
     finally:
         conn.close()

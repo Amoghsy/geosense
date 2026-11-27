@@ -9,8 +9,13 @@ from app.schemas.risk_schema import (
     RiskExplanationResponse,
     RiskHistoryResponse,
     RiskHotspotsResponse,
+    DetailedRiskExplanationResponse,
+    ContributingFactorsResponse,
+    RiskTrendsResponse,
+    RiskComparisonResponse,
 )
 from app.services.weather_service import weather_service, make_location_id
+from app.services.risk_explanation_service import risk_explanation_service
 from app.ml.landslide_weather_analyzer import analyze_rainfall
 from app.ml.landslide_risk_engine import compute_dynamic_risk
 from app.db.database import (
@@ -173,3 +178,86 @@ async def get_assessment_history(assessment_id: str, limit: int = Query(50, ge=1
         count=len(history),
         assessments=history,
     )
+
+
+# ==========================================
+# Phase 5: XAI & Risk Trend Endpoints
+# ==========================================
+
+@router.get(
+    "/risk/{assessment_id}/explanation",
+    response_model=DetailedRiskExplanationResponse,
+    tags=["Phase 5 — XAI & Risk Trends"],
+    summary="Detailed Explainable AI (XAI) Breakdown for an Assessment",
+)
+async def get_detailed_explanation(assessment_id: str):
+    res = risk_explanation_service.explain_assessment(assessment_id)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assessment '{assessment_id}' not found.",
+        )
+    return DetailedRiskExplanationResponse(**res)
+
+
+@router.get(
+    "/risk/{assessment_id}/contributing-factors",
+    response_model=ContributingFactorsResponse,
+    tags=["Phase 5 — XAI & Risk Trends"],
+    summary="Structured Factor Contributions for an Assessment",
+)
+async def get_contributing_factors(assessment_id: str):
+    res = risk_explanation_service.explain_assessment(assessment_id)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Assessment '{assessment_id}' not found.",
+        )
+    return ContributingFactorsResponse(
+        assessment_id=res["assessment_id"],
+        location_id=res["location_id"],
+        risk_score=res["risk_score"],
+        risk_category=res["risk_category"],
+        factors=res["factor_contributions"],
+    )
+
+
+@router.get(
+    "/risk/{location_id}/trends",
+    response_model=RiskTrendsResponse,
+    tags=["Phase 5 — XAI & Risk Trends"],
+    summary="Historical Risk & Rainfall Trends for a Location",
+)
+async def get_location_risk_trends(
+    location_id: str,
+    start_date: Optional[str] = Query(None, description="ISO start timestamp"),
+    end_date: Optional[str] = Query(None, description="ISO end timestamp"),
+):
+    res = risk_explanation_service.analyze_trends(
+        location_id=location_id, start_date=start_date, end_date=end_date
+    )
+    return RiskTrendsResponse(**res)
+
+
+@router.get(
+    "/risk/{location_id}/comparison",
+    response_model=RiskComparisonResponse,
+    tags=["Phase 5 — XAI & Risk Trends"],
+    summary="Compare Two Stored Risk Assessments",
+)
+async def compare_location_assessments(
+    location_id: str,
+    assessment_id_1: str = Query(..., description="Earlier assessment ID"),
+    assessment_id_2: str = Query(..., description="Later assessment ID"),
+):
+    res = risk_explanation_service.compare_assessments(
+        location_id=location_id,
+        assessment_id_1=assessment_id_1,
+        assessment_id_2=assessment_id_2,
+    )
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or both assessment IDs were not found.",
+        )
+    return RiskComparisonResponse(**res)

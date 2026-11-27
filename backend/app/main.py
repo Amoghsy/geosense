@@ -133,6 +133,15 @@ async def serve_gis_ui():
     return HTMLResponse("<h1>GeoSense Phase 4 GIS Dashboard</h1><p>Visit <a href='/docs'>/docs</a></p>")
 
 
+@app.get("/xai-ui", response_class=HTMLResponse, include_in_schema=False)
+async def serve_xai_ui():
+    """Serve the Phase 5 Explainable AI & Risk Trend Dashboard."""
+    html_file = os.path.join(STATIC_DIR, "xai.html")
+    if os.path.isfile(html_file):
+        return FileResponse(html_file, media_type="text/html")
+    return HTMLResponse("<h1>GeoSense Phase 5 XAI Dashboard</h1><p>Visit <a href='/docs'>/docs</a></p>")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

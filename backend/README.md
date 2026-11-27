@@ -394,3 +394,22 @@ Phase 4 unifies Phases 1–3 into a spatial GIS layer management system and an i
 - `GET /gis/hotspots` — Elevated (`HIGH` / `CRITICAL`) Phase 3 grid locations
 - `GET /gis/location` — Spatial query returning state + nearest/intersecting Phase 1–3 data
 - `GET /gis/summary` — Real counts from stored assessments and detections
+
+
+---
+
+## 14. Phase 5 — Explainable AI (XAI) & Risk Trend Analysis
+
+Phase 5 makes every Phase 3 risk assessment transparent, auditable, and trackable over time without fabricating historical records or forcing black-box attributions onto rule-based weights.
+
+### Key Capabilities:
+- **Factor Attribution (`risk_explanation_service.py`):** Exposes each factor's raw input value, normalized score (`0–100`), configured weight, effective normalized weight, exact contribution points (`normalized_score × effective_weight`), source, timestamp, and freshness.
+- **Readable Natural-Language Explanations:** Generated directly from stored assessment values, distinguishing factors that increased vs reduced risk vs unavailable factors, and persisted in `risk_explanations` (`geosense.db`).
+- **Trend Analysis & Comparison:** Tracks historical risk scores, category transitions, and rainfall shifts from stored assessments, and compares any two assessments side-by-side.
+- **Interactive XAI Dashboard (`http://localhost:8000/xai-ui`):** Chart.js factor contribution bar chart, historical risk & rainfall line charts, and assessment comparison panel, directly linked from the Phase 4 GIS map (`/gis-ui`).
+
+### Phase 5 Endpoints:
+- `GET /risk/{assessment_id}/explanation`
+- `GET /risk/{assessment_id}/contributing-factors`
+- `GET /risk/{location_id}/trends`
+- `GET /risk/{location_id}/comparison?assessment_id_1=...&assessment_id_2=...`
