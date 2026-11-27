@@ -11,8 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Lightweight Java 17 HttpClient wrapper connecting the JavaFX Authority Desktop App
- * to the GeoSense FastAPI Backend (Phases 1-8).
+ * Java 17 HttpClient wrapper connecting the JavaFX Authority Command Center
+ * to the GeoSense FastAPI Backend (Phases 1-9).
  */
 public class ApiClient {
     private String baseUrl;
@@ -30,6 +30,10 @@ public class ApiClient {
         this.baseUrl = baseUrl.replaceAll("/+$", "");
     }
 
+    public String getBaseUrl() {
+        return baseUrl;
+    }
+
     public String getToken() {
         return jwtToken;
     }
@@ -37,7 +41,7 @@ public class ApiClient {
     public String request(String method, String path, String jsonBody) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + path))
-                .timeout(Duration.ofSeconds(20))
+                .timeout(Duration.ofSeconds(25))
                 .header("Content-Type", "application/json");
 
         if (jwtToken != null && !jwtToken.isEmpty()) {
@@ -91,8 +95,25 @@ public class ApiClient {
         return request("POST", "/incidents/" + incidentId + "/verify", body);
     }
 
+    public String assignIncident(String incidentId, String officerId, String notes) throws Exception {
+        String body = String.format("{\"officer_id\":\"%s\",\"notes\":\"%s\"}", escapeJson(officerId), escapeJson(notes));
+        return request("POST", "/authority/incidents/" + incidentId + "/assign", body);
+    }
+
+    public String getInspections() throws Exception {
+        return request("GET", "/inspections", null);
+    }
+
     public String getResources() throws Exception {
         return request("GET", "/resources?role=authority", null);
+    }
+
+    public String createResource(String name, String type, String state, double lat, double lon) throws Exception {
+        String body = String.format(
+                "{\"resource_name\":\"%s\",\"resource_type\":\"%s\",\"state\":\"%s\",\"latitude\":%f,\"longitude\":%f,\"is_public_contact\":true}",
+                escapeJson(name), escapeJson(type), escapeJson(state), lat, lon
+        );
+        return request("POST", "/resources?role=authority", body);
     }
 
     public String verifyResource(String resourceId, String verificationStatus) throws Exception {
@@ -103,6 +124,30 @@ public class ApiClient {
                 verificationStatus, op, avail
         );
         return request("POST", "/resources/" + resourceId + "/verify?role=authority", body);
+    }
+
+    public String analyzeRisk(double lat, double lon, String locName, double elev, double slope) throws Exception {
+        String body = String.format(
+                "{\"latitude\":%f,\"longitude\":%f,\"location_name\":\"%s\",\"elevation_m\":%f,\"slope_deg\":%f}",
+                lat, lon, escapeJson(locName), elev, slope
+        );
+        return request("POST", "/risk/analyze", body);
+    }
+
+    public String getRiskTrends(String locationId) throws Exception {
+        return request("GET", "/risk/" + locationId + "/trends", null);
+    }
+
+    public String getContributingFactors(String assessmentId) throws Exception {
+        return request("GET", "/risk/" + assessmentId + "/contributing-factors", null);
+    }
+
+    public String getGisHotspots() throws Exception {
+        return request("GET", "/gis/hotspots", null);
+    }
+
+    public String getGisRiskFeatures() throws Exception {
+        return request("GET", "/gis/layers/phase3_dynamic_risk/features?limit=50", null);
     }
 
     public String generateSituationReport(String regionId) throws Exception {
@@ -124,6 +169,11 @@ public class ApiClient {
         return request("GET", "/alerts", null);
     }
 
+    public String generateAlertsForAssessment(String assessmentId) throws Exception {
+        String body = String.format("{\"assessment_id\":\"%s\"}", escapeJson(assessmentId));
+        return request("POST", "/alerts/generate", body);
+    }
+
     public String approveAlert(String alertId, String notes) throws Exception {
         String body = String.format("{\"admin_notes\":\"%s\",\"expiry_hours\":24}", escapeJson(notes));
         return request("POST", "/alerts/" + alertId + "/approve", body);
@@ -141,6 +191,10 @@ public class ApiClient {
 
     public String getAlertDeliveries(String alertId) throws Exception {
         return request("GET", "/alerts/" + alertId + "/deliveries", null);
+    }
+
+    public String getChannelStatus() throws Exception {
+        return request("GET", "/alerts/status", null);
     }
 
     public static String extractJsonString(String json, String key) {
