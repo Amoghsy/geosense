@@ -8,12 +8,10 @@ export function BottomNavBar() {
   const { role, activeTab, navigate, currentScreen } = useApp();
   const insets = useSafeAreaInsets();
 
-  // Do not show bottom nav on full-screen flows like Login Portal, Officer Login, AR view full screen, or step-by-step reporting
+  // Do not show bottom nav on full-screen flows like Login Portal, Officer Login, or step-by-step reporting
   const isFullScreenFlow =
     currentScreen === 'login-portal' ||
     currentScreen === 'officer-login' ||
-    currentScreen === 'ar-view' ||
-    currentScreen === 'officer-ar' ||
     currentScreen === 'report-incident-1' ||
     currentScreen === 'report-incident-2' ||
     currentScreen === 'report-incident-success';

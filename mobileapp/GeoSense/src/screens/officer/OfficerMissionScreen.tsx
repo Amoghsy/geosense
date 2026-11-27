@@ -123,7 +123,7 @@ export function OfficerMissionScreen() {
             </Text>
           </View>
 
-          {/* Start Navigation / Open AR Buttons */}
+          {/* Start Navigation */}
           <TouchableOpacity
             style={[
               styles.startNavBtn,
@@ -131,12 +131,11 @@ export function OfficerMissionScreen() {
             ]}
             onPress={() => {
               setNavigating(!navigating);
-              navigate('officer-ar');
             }}
             activeOpacity={0.85}>
             <Feather name="navigation" size={18} color="#FFFFFF" />
             <Text style={styles.startNavBtnText}>
-              {navigating ? 'AR Field Inspection Active' : 'Start Navigation'}
+              {navigating ? 'Navigation Active' : 'Start Navigation'}
             </Text>
           </TouchableOpacity>
 

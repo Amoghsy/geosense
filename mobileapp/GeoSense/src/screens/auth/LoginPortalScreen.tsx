@@ -171,7 +171,7 @@ export function LoginPortalScreen() {
 
                   <Text style={styles.cardTitle}>Stay Alert. Stay Safe.</Text>
                   <Text style={styles.cardSubtitle}>
-                    Live landslide probability, safe evacuation corridors, AR risk analysis, and community reporting.
+                    Live landslide probability, safe evacuation corridors, real-time risk analysis, and community reporting.
                   </Text>
                 </View>
 
@@ -226,8 +226,8 @@ export function LoginPortalScreen() {
                     <Text style={styles.featureChipText}>Live Evacuation Routes</Text>
                   </View>
                   <View style={styles.featureChip}>
-                    <Feather name="camera" size={13} color="#2563EB" />
-                    <Text style={styles.featureChipText}>AR Slope Hazard Scan</Text>
+                    <Feather name="shield" size={13} color="#2563EB" />
+                    <Text style={styles.featureChipText}>Slope Hazard Assessment</Text>
                   </View>
                 </View>
 

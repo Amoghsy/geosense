@@ -99,15 +99,15 @@ export function OfficerHomeScreen() {
             <Text style={styles.actionCardLabel}>Incident{'\n'}Verification</Text>
           </TouchableOpacity>
 
-          {/* 4. AR Field View */}
+          {/* 4. Priority Alerts */}
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => navigate('officer-ar')}
+            onPress={() => navigate('officer-alerts')}
             activeOpacity={0.75}>
             <View style={styles.actionIconBox}>
-              <MaterialCommunityIcons name="line-scan" size={22} color="#00875A" />
+              <Feather name="bell" size={22} color="#00875A" />
             </View>
-            <Text style={styles.actionCardLabel}>AR Field{'\n'}View</Text>
+            <Text style={styles.actionCardLabel}>Priority{'\n'}Alerts</Text>
           </TouchableOpacity>
 
           {/* 5. Offline Maps */}

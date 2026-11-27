@@ -13,7 +13,6 @@ import { LiveRiskMapScreen } from '@/screens/citizen/LiveRiskMapScreen';
 import { LocationRiskDetailsScreen } from '@/screens/citizen/LocationRiskDetailsScreen';
 import { UnderstandRiskScreen } from '@/screens/citizen/UnderstandRiskScreen';
 import { EvacuationGuidanceScreen } from '@/screens/citizen/EvacuationGuidanceScreen';
-import { ARFieldIntelligenceScreen } from '@/screens/citizen/ARFieldIntelligenceScreen';
 import { NearbyResourcesScreen } from '@/screens/citizen/NearbyResourcesScreen';
 import { ReportIncidentStep1Screen } from '@/screens/citizen/ReportIncidentStep1Screen';
 import { ReportIncidentStep2Screen } from '@/screens/citizen/ReportIncidentStep2Screen';
@@ -26,7 +25,6 @@ import { OfflineMapsScreen } from '@/screens/citizen/OfflineMapsScreen';
 import { OfficerLoginScreen } from '@/screens/officer/OfficerLoginScreen';
 import { OfficerHomeScreen } from '@/screens/officer/OfficerHomeScreen';
 import { OfficerMissionScreen } from '@/screens/officer/OfficerMissionScreen';
-import { OfficerARInspectionScreen } from '@/screens/officer/OfficerARInspectionScreen';
 import { OfficerIncidentVerificationScreen } from '@/screens/officer/OfficerIncidentVerificationScreen';
 import { OfficerNewReportScreen } from '@/screens/officer/OfficerNewReportScreen';
 import { OfficerAlertsScreen } from '@/screens/officer/OfficerAlertsScreen';
@@ -55,8 +53,6 @@ export default function AppMain() {
         return <UnderstandRiskScreen />;
       case 'evacuation':
         return <EvacuationGuidanceScreen />;
-      case 'ar-view':
-        return <ARFieldIntelligenceScreen />;
       case 'resources':
         return <NearbyResourcesScreen />;
       case 'report-incident-1':
@@ -79,8 +75,6 @@ export default function AppMain() {
         return <OfficerHomeScreen />;
       case 'officer-mission':
         return <OfficerMissionScreen />;
-      case 'officer-ar':
-        return <OfficerARInspectionScreen />;
       case 'officer-verification':
         return <OfficerIncidentVerificationScreen />;
       case 'officer-report':

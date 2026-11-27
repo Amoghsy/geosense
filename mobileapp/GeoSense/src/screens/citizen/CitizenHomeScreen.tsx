@@ -91,15 +91,15 @@ export function CitizenHomeScreen() {
             <Text style={styles.actionLabel}>Risk Map</Text>
           </TouchableOpacity>
 
-          {/* 2. AR View */}
+          {/* 2. Offline Maps */}
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => navigate('ar-view')}
+            onPress={() => navigate('offline-maps')}
             activeOpacity={0.75}>
             <View style={styles.actionIconBox}>
-              <MaterialCommunityIcons name="line-scan" size={24} color="#00875A" />
+              <Feather name="download" size={24} color="#00875A" />
             </View>
-            <Text style={styles.actionLabel}>AR View</Text>
+            <Text style={styles.actionLabel}>Offline Maps</Text>
           </TouchableOpacity>
 
           {/* 3. Evacuation */}

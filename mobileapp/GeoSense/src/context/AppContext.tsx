@@ -12,7 +12,6 @@ export type ScreenName =
   | 'location-details'
   | 'understand-risk'
   | 'evacuation'
-  | 'ar-view'
   | 'resources'
   | 'report-incident-1'
   | 'report-incident-2'
@@ -24,7 +23,6 @@ export type ScreenName =
   | 'officer-login'
   | 'officer-home'
   | 'officer-mission'
-  | 'officer-ar'
   | 'officer-verification'
   | 'officer-report'
   | 'officer-alerts'
@@ -144,13 +142,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const determineTab = (screen: ScreenName): TabName => {
     if (role === 'citizen') {
       if (screen === 'citizen-home' || screen === 'safety-outlook') return 'home';
-      if (screen === 'map' || screen === 'location-details' || screen === 'understand-risk' || screen === 'evacuation' || screen === 'ar-view') return 'map';
+      if (screen === 'map' || screen === 'location-details' || screen === 'understand-risk' || screen === 'evacuation') return 'map';
       if (screen === 'alerts') return 'alerts';
       if (screen === 'profile' || screen === 'offline-maps') return 'profile';
       return 'home';
     } else {
       if (screen === 'officer-home') return 'home';
-      if (screen === 'officer-mission' || screen === 'officer-verification' || screen === 'officer-report' || screen === 'officer-ar') return 'missions';
+      if (screen === 'officer-mission' || screen === 'officer-verification' || screen === 'officer-report') return 'missions';
       if (screen === 'officer-alerts') return 'alerts';
       if (screen === 'officer-profile' || screen === 'officer-offline') return 'profile';
       return 'home';
